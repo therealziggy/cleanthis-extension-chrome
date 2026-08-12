@@ -164,6 +164,18 @@
     });
   }
 
+  // The server hands back download links as absolute URLs, but a relative path
+  // is just as valid a shape for it to use — resolve either against the base
+  // rather than assuming one and building a broken URL from the other.
+  function resolveUrl(pathOrUrl) {
+    if (!pathOrUrl) return null;
+    try {
+      return new URL(pathOrUrl, api.baseUrl).href;
+    } catch (_) {
+      return null;
+    }
+  }
+
   // The download token gates the completed job's details; it also makes the
   // server re-mint a fresh signed download URL on each poll, so a link fetched
   // now is always live.
@@ -207,6 +219,7 @@
     sanitizeUrl,
     getJob,
     waitForJob,
+    resolveUrl,
     getLastQuota: (bucket) => lastQuota[bucket] || null,
     _cooldownRemaining: cooldownRemaining,
     _resetForTests() {
