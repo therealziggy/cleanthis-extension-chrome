@@ -3,12 +3,59 @@
 <head>
   <meta charset="utf-8">
   <title>CleanThis — Settings</title>
+  <link rel="stylesheet" href="options.css">
 </head>
 <body>
-  <h1>CleanThis settings</h1>
-  <p>Settings (download protection opt-in, sanitization level, daily-quota display) arrive with v1.</p>
+  <main>
+    <h1>CleanThis settings</h1>
+
+    <section>
+      <h2>Download protection</h2>
+      <label class="toggle">
+        <input type="checkbox" id="intercept-enabled">
+        <span>Clean matching downloads automatically</span>
+      </label>
+      <p class="help">
+        Off by default. While it is on, the web address of a matching download is sent to
+        cleanthis.io, which fetches and cleans the file and gives you the cleaned copy.
+        You can always choose to download the original instead — nothing is ever blocked
+        outright.
+      </p>
+    </section>
+
+    <section>
+      <h2>Cleaning level</h2>
+      <select id="level">
+        <option value="light">Light — scan &amp; strip metadata</option>
+        <option value="standard">Standard — full clean</option>
+        <option value="aggressive">Aggressive — convert to safest form</option>
+      </select>
+      <p class="help">Used for files you clean from the popup and for automatic downloads.</p>
+    </section>
+
+    <section>
+      <h2>File types to clean automatically</h2>
+      <textarea id="intercept-exts" rows="3" spellcheck="false"></textarea>
+      <p class="help">
+        Comma-separated. Only these download types are intercepted.
+        <button type="button" id="restore-exts" class="link">Restore defaults</button>
+      </p>
+    </section>
+
+    <section>
+      <h2>Daily allowance</h2>
+      <p id="quota" class="quota">No requests yet.</p>
+      <p class="help">
+        cleanthis.io allows a set number of scans and files per day. The extension pauses
+        rather than retrying when the allowance runs out.
+      </p>
+    </section>
+
+    <p class="version" id="version"></p>
+  </main>
 
   <script src="../lib/api.js"></script>
+  <script src="../lib/intercept.js"></script>
   <script src="options.js"></script>
 </body>
 </html>
