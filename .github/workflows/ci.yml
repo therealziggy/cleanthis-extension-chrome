@@ -3,11 +3,17 @@ name: CI
 on:
   push:
     branches: [main]
+    tags: ["v*"]
   pull_request:
+
+permissions:
+  contents: read
 
 jobs:
   build-and-lint:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # create releases on tag pushes
     steps:
       - uses: actions/checkout@v4
 
@@ -30,3 +36,28 @@ jobs:
         with:
           name: extension-builds
           path: dist/*.zip
+
+      # ── Releases: pushing a tag like v0.2.0 publishes a GitHub Release
+      #    carrying both store-ready zips. A tag with a hyphen suffix
+      #    (v0.2.0-beta) is marked as a pre-release.
+      - name: Check tag matches manifest version
+        if: startsWith(github.ref, 'refs/tags/v')
+        run: |
+          TAG="${GITHUB_REF_NAME#v}"
+          BASE="${TAG%%-*}"
+          VERSION="$(node -p "require('./manifest/base.json').version")"
+          if [ "$BASE" != "$VERSION" ]; then
+            echo "Tag $GITHUB_REF_NAME does not match manifest version $VERSION" >&2
+            exit 1
+          fi
+
+      - name: Create GitHub release with store-ready zips
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          PRERELEASE=""
+          case "$GITHUB_REF_NAME" in *-*) PRERELEASE="--prerelease" ;; esac
+          gh release create "$GITHUB_REF_NAME" dist/*.zip \
+            --title "CleanThis $GITHUB_REF_NAME" \
+            --generate-notes $PRERELEASE
