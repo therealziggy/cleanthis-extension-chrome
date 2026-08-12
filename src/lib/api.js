@@ -3,10 +3,10 @@
 // Everything that talks to the server lives here: the anonymous form-token
 // flow, one wrapper per endpoint, job polling, and the polite-client rules.
 //
-// Being polite matters more than it looks. The server bans an IP at the
-// firewall after repeated rate-limit responses, so a 429 must stop us from
-// calling again for a while rather than trigger a retry: one 429 sets a
-// cooldown, and every call during it fails locally without touching the
+// Being polite matters more than it looks. Repeatedly ignoring a "slow down"
+// response can get a user cut off from the service entirely, so a 429 must
+// stop us calling again for a while rather than trigger a retry: one 429 sets
+// a cooldown, and every call during it fails locally without touching the
 // network.
 //
 // Plain script (no module system): defines self.CleanThisApi for the
@@ -41,7 +41,7 @@
   // The cooldown has to outlive this JavaScript realm. The popup, the options
   // page and the background worker each run their own copy of this file, and
   // the worker is restarted freely — an in-memory pause would let a restart
-  // walk straight back into the rate limiter that gets the user's IP banned.
+  // walk straight back into the limit it was meant to back off from.
   // Storage is the shared, durable copy; the local variable is the fast path.
   const COOLDOWN_KEY = "apiCooldownUntil";
   const storage = typeof chrome !== "undefined" && chrome.storage ? chrome.storage.local : null;
