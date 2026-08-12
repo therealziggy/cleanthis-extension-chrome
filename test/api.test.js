@@ -98,6 +98,29 @@ test("a 429 carrying the daily-quota code reports quota, not rate limiting", asy
   });
 });
 
+test("a spent daily allowance pauses until it resets, not for a minute", async () => {
+  // Regression: a 60-second pause meant walking back into the rate limiter
+  // every minute for the rest of the day, which is what gets an IP banned.
+  const resetEpoch = Math.floor(Date.now() / 1000) + 4 * 60 * 60;
+  stubFetch([
+    tokenOk(),
+    jsonResponse({ code: "daily_quota_exceeded", limit: 25, used: 25, resetEpoch }, { status: 429 }),
+  ]);
+
+  await assert.rejects(() => api.scanUrl("https://example.com", "light"));
+
+  const remaining = api._cooldownRemaining();
+  assert.ok(remaining > 3 * 60 * 60 * 1000, `expected a pause of hours, got ${remaining}ms`);
+});
+
+test("a quota 429 without a reset time still pauses for much longer than a minute", async () => {
+  stubFetch([tokenOk(), jsonResponse({ code: "daily_quota_exceeded", limit: 25 }, { status: 429 })]);
+
+  await assert.rejects(() => api.scanUrl("https://example.com", "light"));
+
+  assert.ok(api._cooldownRemaining() > 10 * 60 * 1000);
+});
+
 // ── quota headers ─────────────────────────────────────────────
 
 test("quota headers are recorded per bucket", async () => {

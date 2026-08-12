@@ -16,6 +16,8 @@
 
 (() => {
   const DEFAULT_COOLDOWN_MS = 60000;
+  const QUOTA_COOLDOWN_MS = 30 * 60000; // a spent daily allowance, reset time unknown
+  const MAX_COOLDOWN_MS = 24 * 60 * 60000;
   const POLL_INTERVAL_MS = 1500;
   const JOB_TIMEOUT_MS = 300000;
 
@@ -36,12 +38,48 @@
   let cooldownUntil = 0;
   const lastQuota = { scan: null, upload: null };
 
+  // The cooldown has to outlive this JavaScript realm. The popup, the options
+  // page and the background worker each run their own copy of this file, and
+  // the worker is restarted freely — an in-memory pause would let a restart
+  // walk straight back into the rate limiter that gets the user's IP banned.
+  // Storage is the shared, durable copy; the local variable is the fast path.
+  const COOLDOWN_KEY = "apiCooldownUntil";
+  const storage = typeof chrome !== "undefined" && chrome.storage ? chrome.storage.local : null;
+
+  if (storage) {
+    storage.get(COOLDOWN_KEY).then((stored) => {
+      const persisted = stored && stored[COOLDOWN_KEY];
+      if (persisted && persisted > cooldownUntil) cooldownUntil = persisted;
+    }).catch(() => {});
+    if (chrome.storage.onChanged) {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (area !== "local" || !changes[COOLDOWN_KEY]) return;
+        const next = changes[COOLDOWN_KEY].newValue || 0;
+        if (next > cooldownUntil) cooldownUntil = next;
+      });
+    }
+  }
+
   function cooldownRemaining() {
     return Math.max(0, cooldownUntil - Date.now());
   }
 
   function startCooldown(ms) {
     cooldownUntil = Math.max(cooldownUntil, Date.now() + ms);
+    if (storage) storage.set({ [COOLDOWN_KEY]: cooldownUntil }).catch(() => {});
+  }
+
+  // Re-read the shared value before deciding to call out: another context may
+  // have been rate-limited since this one last looked.
+  async function syncCooldown() {
+    if (!storage) return;
+    try {
+      const stored = await storage.get(COOLDOWN_KEY);
+      const persisted = stored && stored[COOLDOWN_KEY];
+      if (persisted && persisted > cooldownUntil) cooldownUntil = persisted;
+    } catch (_) {
+      /* fall back to the in-memory value */
+    }
   }
 
   function noteQuota(bucket, headers) {
@@ -62,6 +100,7 @@
   }
 
   async function request(path, { method = "GET", headers = {}, body, bucket } = {}) {
+    await syncCooldown();
     const waitMs = cooldownRemaining();
     if (waitMs > 0) {
       throw new ApiError("Paused after hitting a rate limit. Please try again shortly.", {
@@ -91,9 +130,18 @@
     if (response.status === 429) {
       const isQuota = payload && payload.code === "daily_quota_exceeded";
       const retryAfterHeader = Number(response.headers.get("Retry-After"));
-      const retryAfterMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
+      let retryAfterMs = Number.isFinite(retryAfterHeader) && retryAfterHeader > 0
         ? retryAfterHeader * 1000
         : DEFAULT_COOLDOWN_MS;
+      // A spent daily allowance doesn't come back in a minute. Pausing until
+      // the server's own reset time keeps us from walking back into the limiter
+      // every minute for the rest of the day.
+      if (isQuota && payload.resetEpoch) {
+        const untilReset = payload.resetEpoch * 1000 - Date.now();
+        if (untilReset > retryAfterMs) retryAfterMs = Math.min(untilReset, MAX_COOLDOWN_MS);
+      } else if (isQuota) {
+        retryAfterMs = Math.max(retryAfterMs, QUOTA_COOLDOWN_MS);
+      }
       startCooldown(retryAfterMs);
       if (isQuota) {
         throw new ApiError(

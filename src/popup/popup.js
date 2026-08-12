@@ -187,33 +187,43 @@ els.fileInput.addEventListener("change", async () => {
       },
     });
 
-    port.postMessage({ done: true });
-
     if (finished.state === "completed") {
       const wrap = document.createDocumentFragment();
       wrap.append(text("p", null, `${finished.downloadName || file.name} is ready.`));
       const save = document.createElement("button");
       save.textContent = "Save cleaned file";
+      const note = text("p", "driver");
       save.addEventListener("click", async () => {
         // Download links are signed and short-lived, so ask for a fresh one
         // at click time rather than reusing the one from completion.
         save.disabled = true;
+        note.textContent = "";
         try {
           const fresh = await api.getJob(job.jobId, job.downloadToken);
           const url = fresh && fresh.state === "completed" ? api.resolveUrl(fresh.downloadUrl) : null;
-          if (!url) throw new api.ApiError("Cleaned files are kept briefly — please run it through again.");
-          ext.downloads.download({ url, filename: fresh.downloadName || undefined });
+          if (!url) throw new api.ApiError("Cleaned files are only kept for a few minutes. Clean it again for a fresh copy.");
+          await ext.downloads.download({ url, filename: fresh.downloadName || undefined });
+          // Only now is the file genuinely the user's; until this point the
+          // background worker stays on the job in case the popup disappears.
+          port.postMessage({ done: true });
+          note.textContent = "Saved.";
         } catch (err) {
-          show(els.cleanResult, { html: text("span", null, humanize(err)), error: true });
-          return;
+          // Leave the button usable — the job is valid for a few more minutes
+          // and a second click often just works.
+          note.textContent = humanize(err);
         }
         save.disabled = false;
       });
       wrap.append(save);
+      wrap.append(note);
       show(els.cleanResult, { html: wrap });
     } else if (finished.state === "cancelled") {
+      port.postMessage({ done: true });
       show(els.cleanResult, { html: text("span", null, "That job was cancelled."), error: true });
     } else {
+      // The failure is on screen already; no need for the background worker to
+      // repeat it as a notification.
+      port.postMessage({ done: true });
       show(els.cleanResult, {
         html: text("span", null, finished.error || "Cleaning failed. Please try again."),
         error: true,
