@@ -248,8 +248,8 @@ ext.runtime.onConnect.addListener((port) => {
 
 const handledDownloads = new Set();
 
-function offerOriginal(url, message, title = "Couldn't clean this download") {
-  return notify(title, message, { kind: "download-original", url, label: "Download original" });
+function offerOriginal(url, message, title = "Couldn't clean this download", label = "Download original") {
+  return notify(title, message, { kind: "download-original", url, label });
 }
 
 async function handleDownload(item) {
@@ -308,10 +308,13 @@ async function handleDownload(item) {
 
     if (submission && submission.sourceWarning) {
       await finish();
+      // The file is still the user's to take, but nothing here should read as
+      // a neutral "carry on" — the action says plainly what it does.
       await offerOriginal(
         url,
-        `${submission.sourceWarning} Downloading it is not recommended.`,
-        "⚠️ Dangerous download stopped"
+        `${submission.sourceWarning} We strongly recommend not downloading it.`,
+        "⚠️ Dangerous download stopped",
+        "Download anyway (unsafe)"
       );
       return;
     }

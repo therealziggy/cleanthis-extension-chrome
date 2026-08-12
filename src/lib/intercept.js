@@ -54,6 +54,37 @@
     }
   }
 
+  // Addresses that only exist on this machine or this network: a router page,
+  // a NAS, a local dev server. The service fetches downloads from its own
+  // location, so it could never reach these — stepping in would interrupt the
+  // download for nothing and send an internal address off the machine.
+  function isLocalAddress(host) {
+    if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return true;
+    if (host === "::1" || host === "[::1]") return true;
+    const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+    if (v4) {
+      const [a, b] = [Number(v4[1]), Number(v4[2])];
+      if (a === 127 || a === 10 || a === 0) return true;
+      if (a === 192 && b === 168) return true;
+      if (a === 172 && b >= 16 && b <= 31) return true;
+      if (a === 169 && b === 254) return true;
+    }
+    // Bare hostnames with no dot are intranet names (\\server\share, http://nas).
+    if (!host.includes(".") && !host.includes(":")) return true;
+    return false;
+  }
+
+  // A link carrying a password, or a one-time signed link, is the user's own
+  // secret. Handing it to a service that would re-fetch it is not our call.
+  function carriesCredentials(url) {
+    try {
+      const parsed = new URL(url);
+      return !!(parsed.username || parsed.password);
+    } catch (_) {
+      return false;
+    }
+  }
+
   // Ours = the exact host or any subdomain of it. Ports are ignored: a cleaned
   // file can be served from a different port during local development, and
   // treating that as someone else's download would cause an interception loop.
@@ -72,6 +103,10 @@
     if (!host) return { intercept: false, reason: "bad-url" };
 
     if (isOwnHost(host, hostOf(baseUrl))) return { intercept: false, reason: "own-host" };
+
+    if (isLocalAddress(host)) return { intercept: false, reason: "local-address" };
+
+    if (carriesCredentials(url)) return { intercept: false, reason: "credentials" };
 
     const bypass = bypassSet || new Set();
     if (bypass.has(url) || (item.finalUrl && bypass.has(item.finalUrl))) {

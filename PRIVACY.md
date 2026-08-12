@@ -30,9 +30,16 @@ by the extension.
 
 ## What is stored, and where
 
-Your settings — the download-protection toggle, cleaning level, file-type list — and
-the most recent daily-allowance figures are stored in your browser's own extension
-storage, on your device. Nothing is synced anywhere by the extension.
+Everything below is kept in your browser's own extension storage, on your device.
+Nothing is synced anywhere by the extension, and none of it is sent to cleanthis.io.
+
+- Your settings: the download-protection toggle, cleaning level, and file-type list.
+- The most recent daily-allowance figures.
+- While download protection is on: the web address of a download currently being
+  cleaned (so an interrupted clean can offer you the original), and addresses you
+  chose to download untouched. Both are short-lived — each entry is discarded once
+  the download it refers to is dealt with, and they are cleared when you close the
+  browser. No history of past downloads is kept.
 
 ## What cleanthis.io does with what it receives
 
