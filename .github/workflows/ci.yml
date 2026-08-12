@@ -6,16 +6,13 @@ on:
     tags: ["v*"]
   pull_request:
 
+# Read-only by default; the release job below opts into write for itself.
 permissions:
   contents: read
 
 jobs:
   build-and-lint:
     runs-on: ubuntu-latest
-    # Write access is only needed to publish a release, so only a tag push gets
-    # it. Ordinary pushes and pull requests build with read-only access.
-    permissions:
-      contents: ${{ startsWith(github.ref, 'refs/tags/v') && 'write' || 'read' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -42,11 +39,18 @@ jobs:
           name: extension-builds
           path: dist/*.zip
 
-      # ── Releases: pushing a tag like v0.2.0 publishes a GitHub Release
-      #    carrying both store-ready zips. A tag with a hyphen suffix
-      #    (v0.2.0-beta) is marked as a pre-release.
-      - name: Check tag matches manifest version
-        if: startsWith(github.ref, 'refs/tags/v')
+  # Pushing a tag like v0.2.0 publishes a GitHub Release carrying both
+  # store-ready zips. A tag with a suffix (v0.2.0-beta) becomes a pre-release.
+  release:
+    needs: build-and-lint
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Check the tag matches the manifest version
         run: |
           TAG="${GITHUB_REF_NAME#v}"
           BASE="${TAG%%-*}"
@@ -56,8 +60,13 @@ jobs:
             exit 1
           fi
 
-      - name: Create GitHub release with store-ready zips
-        if: startsWith(github.ref, 'refs/tags/v')
+      - name: Fetch the built zips
+        uses: actions/download-artifact@v4
+        with:
+          name: extension-builds
+          path: dist
+
+      - name: Publish the release
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
