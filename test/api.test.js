@@ -178,6 +178,28 @@ test("sanitizeUrl surfaces a blocked source instead of a job", async () => {
   assert.match(result.sourceWarning, /flagged/);
 });
 
+// ── download links ────────────────────────────────────────────
+
+test("resolveUrl accepts both the absolute links the server sends and relative paths", () => {
+  // Regression: prefixing an already-absolute URL produced
+  // "https://cleanthis.iohttps://cleanthis.io/..." and every download failed.
+  assert.equal(
+    api.resolveUrl("https://cleanthis.io/api/download/j1?sig=x"),
+    "https://cleanthis.io/api/download/j1?sig=x"
+  );
+  assert.equal(api.resolveUrl("/api/download/j1?sig=x"), "https://cleanthis.io/api/download/j1?sig=x");
+
+  api.baseUrl = "http://localhost:3000";
+  assert.equal(
+    api.resolveUrl("http://localhost:3000/api/download/j1"),
+    "http://localhost:3000/api/download/j1"
+  );
+  assert.equal(api.resolveUrl("/api/download/j1"), "http://localhost:3000/api/download/j1");
+
+  assert.equal(api.resolveUrl(null), null);
+  assert.equal(api.resolveUrl(""), null);
+});
+
 // ── job polling ───────────────────────────────────────────────
 
 test("waitForJob polls until the job reaches a terminal state", async () => {

@@ -200,9 +200,9 @@ els.fileInput.addEventListener("change", async () => {
         save.disabled = true;
         try {
           const fresh = await api.getJob(job.jobId, job.downloadToken);
-          const url = fresh && fresh.state === "completed" && fresh.downloadUrl ? fresh.downloadUrl : null;
+          const url = fresh && fresh.state === "completed" ? api.resolveUrl(fresh.downloadUrl) : null;
           if (!url) throw new api.ApiError("Cleaned files are kept briefly — please run it through again.");
-          ext.downloads.download({ url: api.baseUrl + url, filename: fresh.downloadName || undefined });
+          ext.downloads.download({ url, filename: fresh.downloadName || undefined });
         } catch (err) {
           show(els.cleanResult, { html: text("span", null, humanize(err)), error: true });
           return;

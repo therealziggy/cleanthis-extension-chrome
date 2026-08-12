@@ -110,7 +110,7 @@ async function runAction(notificationId) {
       const job = await api.getJob(action.jobId, action.token);
       if (job && job.state === "completed" && job.downloadUrl) {
         ext.downloads.download({
-          url: api.baseUrl + job.downloadUrl,
+          url: api.resolveUrl(job.downloadUrl),
           filename: job.downloadName || undefined,
         }).catch(() => {});
       } else {
@@ -264,7 +264,7 @@ async function handleDownload(item) {
 
   try {
     await ext.downloads.download({
-      url: api.baseUrl + job.downloadUrl,
+      url: api.resolveUrl(job.downloadUrl),
       filename: job.downloadName || undefined,
     });
     await notify("Download cleaned ✓", `${job.downloadName || label} was cleaned and saved.`);

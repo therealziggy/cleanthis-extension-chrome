@@ -86,5 +86,18 @@ if (process.argv.includes("--dev")) {
   fs.mkdirSync(outDir, { recursive: true });
   fs.cpSync(path.join(ROOT, "src"), outDir, { recursive: true });
   fs.writeFileSync(path.join(outDir, "manifest.json"), JSON.stringify(manifest, null, 2) + "\n");
-  console.log("built dist/chrome-dev (DEV — localhost permissions, do not ship)");
+
+  // Point the dev build at the local server permanently. Setting it at runtime
+  // isn't enough: the service worker is restarted freely, which would reset it
+  // and quietly send test traffic to production.
+  const devBase = process.env.API_BASE || "http://localhost:3000";
+  const apiPath = path.join(outDir, "lib", "api.js");
+  const source = fs.readFileSync(apiPath, "utf8");
+  const patched = source.replace('baseUrl: "https://cleanthis.io"', `baseUrl: ${JSON.stringify(devBase)}`);
+  if (patched === source) {
+    console.error("dev build: could not rewrite the API base URL — has lib/api.js changed shape?");
+    process.exit(1);
+  }
+  fs.writeFileSync(apiPath, patched);
+  console.log(`built dist/chrome-dev (DEV — ${devBase}, do not ship)`);
 }
