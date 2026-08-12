@@ -5,7 +5,8 @@ threats (macros, embedded scripts, exploit vectors, metadata) using Content Disa
 Reconstruction, and check webpages for scams, phishing and privacy issues — right from
 your browser.
 
-**Status: in development — not yet published to the extension stores.**
+**Status: beta — working, but not yet published to the extension stores.**
+Install it from [Releases](../../releases) for now (see *Building & trying it*).
 
 One codebase builds for **Chrome, Edge, Brave, Opera** (Chromium build) and **Firefox**.
 
@@ -15,7 +16,7 @@ The extension is a thin, fully open-source client for cleanthis.io's public APIs
 Files and URLs are processed by cleanthis.io's servers — nothing is analyzed on your
 machine, and the extension contains no accounts, keys, or secrets of any kind.
 
-Planned v1 features:
+Features:
 
 - **Clean a file** — pick a file, get back a sanitized copy (Light / Standard /
   Aggressive, the same three presets as the website).
@@ -26,6 +27,10 @@ Planned v1 features:
   the cleaned copy instead. Every failure path offers a one-click "download the
   original anyway" — the extension never makes a file unreachable.
 
+cleanthis.io allows a set number of scans and files per day per user. The extension
+shows what's left, and pauses instead of retrying when the allowance runs out or the
+service asks it to slow down.
+
 ## Repo layout
 
 | Path | What |
@@ -33,7 +38,8 @@ Planned v1 features:
 | `src/` | The extension itself — plain JavaScript, shared by every browser |
 | `manifest/` | `base.json` + per-browser fragments (`chrome.json`, `firefox.json`) |
 | `build.js` | Merges manifests and assembles `dist/chrome` + `dist/firefox` |
-| `.github/workflows/` | CI: build + Firefox compatibility lint + downloadable artifacts |
+| `test/` | Unit tests (`npm test`) plus manual browser harnesses |
+| `.github/workflows/` | CI: tests + build + Firefox compatibility lint + artifacts |
 
 ## Building & trying it
 
@@ -54,14 +60,29 @@ testers (loaded unpacked / as a temporary add-on, as above); once published, the
 stores handle installs and auto-updates.
 
 No bundler and no transpilation — what's in `src/` is exactly what runs. `npm ci` is
-only needed for the dev tooling (`web-ext` lint).
+only needed for the dev tooling (tests, `web-ext` lint, browser harnesses).
+
+### Tests
+
+```
+npm test
+```
+
+Unit tests cover the API client and the interception rules; they stub the network and
+need no browser. There are also two manual harnesses that drive the built extension in
+a real browser against a locally running cleanthis.io instance — `test/e2e.js` (scan,
+clean, intercept, and the "download the original" path) and
+`test/harness/smoke-load.js`. Run `node build.js --dev` first; they need a browser that
+still accepts `--load-extension` (recent Google Chrome does not — Brave or Chromium
+work, or set `BROWSER_BIN`).
 
 ## Privacy
 
 All requests go exclusively to `cleanthis.io`. A URL or file is sent only when you
 trigger an action yourself — or, for download protection, only after you explicitly
-turn it on. The extension collects no browsing history and no analytics. A full
-privacy policy will accompany the store release.
+turn it on. The extension collects no browsing history and no analytics.
+
+Full detail: [PRIVACY.md](PRIVACY.md).
 
 ## License
 

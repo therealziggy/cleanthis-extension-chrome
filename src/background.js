@@ -211,6 +211,12 @@ async function handleDownload(item) {
   const decision = intercept.decide(item, settings, await getBypass(), api.baseUrl);
   if (!decision.intercept) return;
 
+  // If the service is already refusing requests — daily allowance spent, or a
+  // rate-limit cooldown in effect — stepping in would cancel the download only
+  // to hand it straight back. Leave it alone instead: a normal download beats
+  // an interrupted one plus a notification the user has to click.
+  if (api._cooldownRemaining() > 0) return;
+
   handledDownloads.add(item.id);
   const url = item.url;
   const label = item.filename ? item.filename.split(/[\\/]/).pop() : url;
