@@ -1,0 +1,16 @@
+{
+  "manifest_version": 3,
+  "name": "CleanThis",
+  "version": "0.1.0",
+  "description": "Clean files and scan webpages with cleanthis.io — CDR file sanitization and website safety checks.",
+  "permissions": ["downloads", "storage", "notifications", "activeTab"],
+  "host_permissions": ["https://cleanthis.io/*"],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_title": "CleanThis"
+  },
+  "options_ui": {
+    "page": "options/options.html",
+    "open_in_tab": true
+  }
+}
