@@ -40,21 +40,45 @@ async function getSettings() {
 // builds lack it, so fall back to local storage.
 const actionStore = ext.storage.session || ext.storage.local;
 const ACTIONS_KEY = "pendingActions";
+const INFLIGHT_KEY = "inflightDownloads";
 
-async function rememberAction(notificationId, action) {
-  const { [ACTIONS_KEY]: actions = {} } = await actionStore.get(ACTIONS_KEY);
-  actions[notificationId] = action;
-  await actionStore.set({ [ACTIONS_KEY]: actions });
+// Every update here is a read-modify-write on a shared object, and two
+// downloads failing at once would otherwise overwrite each other's recovery
+// offer. Chaining the updates keeps them ordered.
+let storageChain = Promise.resolve();
+
+function updateStore(key, mutate, fallback) {
+  storageChain = storageChain
+    .catch(() => {})
+    .then(async () => {
+      const stored = await actionStore.get(key);
+      const current = stored[key] === undefined ? fallback : stored[key];
+      await actionStore.set({ [key]: mutate(current) });
+    });
+  return storageChain;
 }
 
-async function takeAction(notificationId) {
+function rememberAction(notificationId, action) {
+  return updateStore(ACTIONS_KEY, (actions) => ({ ...actions, [notificationId]: action }), {});
+}
+
+async function peekAction(notificationId) {
   const { [ACTIONS_KEY]: actions = {} } = await actionStore.get(ACTIONS_KEY);
-  const action = actions[notificationId];
-  if (action) {
-    delete actions[notificationId];
-    await actionStore.set({ [ACTIONS_KEY]: actions });
-  }
-  return action || null;
+  return actions[notificationId] || null;
+}
+
+// Actions are only dropped once they have actually been carried out — a click
+// that fails must leave the offer in place rather than consume it.
+function clearAction(notificationId) {
+  return updateStore(
+    ACTIONS_KEY,
+    (actions) => {
+      const next = { ...actions };
+      delete next[notificationId];
+      return next;
+    },
+    {}
+  );
 }
 
 // ── notifications ─────────────────────────────────────────────
@@ -93,14 +117,21 @@ async function notify(title, message, action) {
 // ── running a remembered action ───────────────────────────────
 
 async function runAction(notificationId) {
-  const action = await takeAction(notificationId);
+  const action = await peekAction(notificationId);
   if (!action) return;
 
   if (action.kind === "download-original") {
-    // Remember the choice so the download we are about to start isn't
-    // intercepted straight back into the cleaner.
+    // Mark the choice so the download we are about to start isn't intercepted
+    // straight back into the cleaner.
     await addBypass(action.url);
-    ext.downloads.download({ url: action.url }).catch(() => {});
+    try {
+      await ext.downloads.download({ url: action.url });
+      await clearAction(notificationId);
+    } catch (err) {
+      // Keep the offer alive and say so, rather than silently consuming the
+      // user's only route back to their file.
+      await notify("Couldn't start that download", "Please try again, or copy the link from the page.");
+    }
     return;
   }
 
@@ -109,29 +140,41 @@ async function runAction(notificationId) {
     try {
       const job = await api.getJob(action.jobId, action.token);
       if (job && job.state === "completed" && job.downloadUrl) {
-        ext.downloads.download({
+        await ext.downloads.download({
           url: api.resolveUrl(job.downloadUrl),
           filename: job.downloadName || undefined,
-        }).catch(() => {});
+        });
+        await clearAction(notificationId);
       } else {
-        await notify("Cleaned file no longer available", "Cleaned files are kept briefly. Please run it through again.");
+        await clearAction(notificationId);
+        await notify(
+          "That cleaned file has expired",
+          "Cleaned files are only kept for a few minutes. Clean it again to get a fresh copy."
+        );
       }
     } catch (err) {
-      await notify("Couldn't fetch the cleaned file", err.message || "Please try again.");
+      await notify("Couldn't fetch the cleaned file", "Please try again in a moment.");
     }
   }
 }
 
 ext.notifications.onButtonClicked.addListener((notificationId) => {
-  runAction(notificationId);
-  ext.notifications.clear(notificationId);
+  runAction(notificationId).finally(() => ext.notifications.clear(notificationId));
 });
 
+// A body click means "yes, do the thing" on both platforms. Chrome also shows
+// a button, but plenty of people click the notification itself — treating that
+// as a dismissal would throw away the only route back to the file.
 ext.notifications.onClicked.addListener((notificationId) => {
-  // Chrome has explicit buttons; a body click there is just a dismissal.
-  if (IS_FIREFOX) runAction(notificationId);
-  ext.notifications.clear(notificationId);
+  runAction(notificationId).finally(() => ext.notifications.clear(notificationId));
 });
+
+// A dismissed notification must not strand the offer in storage forever.
+if (ext.notifications.onClosed) {
+  ext.notifications.onClosed.addListener((notificationId, byUser) => {
+    if (byUser) clearAction(notificationId);
+  });
+}
 
 // ── bypass list ───────────────────────────────────────────────
 // URLs the user chose to download untouched. Capped so a long session can't
@@ -145,11 +188,19 @@ async function getBypass() {
   return new Set(urls);
 }
 
-async function addBypass(url) {
-  const { [BYPASS_KEY]: urls = [] } = await actionStore.get(BYPASS_KEY);
-  const next = urls.filter((u) => u !== url);
-  next.push(url);
-  await actionStore.set({ [BYPASS_KEY]: next.slice(-BYPASS_MAX) });
+function addBypass(url) {
+  return updateStore(
+    BYPASS_KEY,
+    (urls) => [...urls.filter((u) => u !== url), url].slice(-BYPASS_MAX),
+    []
+  );
+}
+
+// A bypass covers exactly the one download the user asked to keep untouched.
+// Consuming it means a later, deliberate download of the same address is
+// cleaned again rather than silently waved through for the rest of the session.
+function consumeBypass(url) {
+  return updateStore(BYPASS_KEY, (urls) => urls.filter((u) => u !== url), []);
 }
 
 // ── watching a job the popup handed over ──────────────────────
@@ -209,7 +260,12 @@ async function handleDownload(item) {
 
   const settings = await getSettings();
   const decision = intercept.decide(item, settings, await getBypass(), api.baseUrl);
-  if (!decision.intercept) return;
+  if (!decision.intercept) {
+    // The waiver covered this one download; spend it so a later, deliberate
+    // download of the same address is cleaned again.
+    if (decision.reason === "bypassed") await consumeBypass(item.url);
+    return;
+  }
 
   // If the service is already refusing requests — daily allowance spent, or a
   // rate-limit cooldown in effect — stepping in would cancel the download only
@@ -221,63 +277,87 @@ async function handleDownload(item) {
   const url = item.url;
   const label = item.filename ? item.filename.split(/[\\/]/).pop() : url;
 
-  // Stop the browser's own copy first: the point is that the raw file never
-  // lands on disk. erase() also clears the cancelled row from the downloads
-  // list so the user isn't left looking at a phantom failure.
+  // Stop the browser's own copy: the point is that the raw file never lands on
+  // disk. The cancelled row is deliberately LEFT in the downloads list — it is
+  // the browser's own retry affordance, and it stays as a second way back to
+  // the file if anything below goes wrong or this worker is shut down.
+  let cancelled = true;
   try {
     await ext.downloads.cancel(item.id);
   } catch (_) {
-    /* already finished or gone — the clean copy is still worth fetching */
+    // Already finished: the untouched file is on disk. Say nothing further —
+    // hiding it would be worse than a file the user knowingly downloaded.
+    cancelled = false;
   }
-  ext.downloads.erase({ id: item.id }).catch(() => {});
+
+  if (!cancelled) return;
+
+  // Note the work before the long wait. If the worker is suspended mid-clean,
+  // the next startup finds this record and offers the original.
+  await updateStore(INFLIGHT_KEY, (rows) => ({ ...rows, [url]: { label, at: Date.now() } }), {});
+  const finish = () => updateStore(INFLIGHT_KEY, (rows) => {
+    const next = { ...rows };
+    delete next[url];
+    return next;
+  }, {});
 
   await notify("Cleaning download…", label);
 
-  let submission;
   try {
-    submission = await api.sanitizeUrl(url, settings.level);
-  } catch (err) {
-    await offerOriginal(url, `${err.message || "The cleaning service didn't respond."}`);
-    return;
-  }
+    const submission = await api.sanitizeUrl(url, settings.level);
 
-  if (submission && submission.sourceWarning) {
-    await offerOriginal(
-      url,
-      `${submission.sourceWarning} Downloading it is not recommended.`,
-      "⚠️ Dangerous download blocked"
-    );
-    return;
-  }
+    if (submission && submission.sourceWarning) {
+      await finish();
+      await offerOriginal(
+        url,
+        `${submission.sourceWarning} Downloading it is not recommended.`,
+        "⚠️ Dangerous download stopped"
+      );
+      return;
+    }
 
-  if (!submission || !submission.jobId) {
-    await offerOriginal(url, "The cleaning service couldn't take this file.");
-    return;
-  }
+    if (!submission || !submission.jobId) {
+      await finish();
+      await offerOriginal(url, "The cleaning service couldn't take this file.");
+      return;
+    }
 
-  let job;
-  try {
-    job = await api.waitForJob(submission.jobId, submission.downloadToken);
-  } catch (err) {
-    await offerOriginal(url, err.message || "Cleaning took too long.");
-    return;
-  }
+    const job = await api.waitForJob(submission.jobId, submission.downloadToken);
 
-  if (job.state !== "completed" || !job.downloadUrl) {
-    await offerOriginal(url, job.error || "The file couldn't be cleaned.");
-    return;
-  }
+    if (job.state !== "completed" || !job.downloadUrl) {
+      await finish();
+      await offerOriginal(url, job.error || "The file couldn't be cleaned.");
+      return;
+    }
 
-  try {
+    // downloads.download resolves once the download has STARTED, so the
+    // notification says what is actually true at that point.
     await ext.downloads.download({
       url: api.resolveUrl(job.downloadUrl),
       filename: job.downloadName || undefined,
     });
-    await notify("Download cleaned ✓", `${job.downloadName || label} was cleaned and saved.`);
+    await finish();
+    await notify("Download cleaned ✓", `Saving ${job.downloadName || label}.`);
   } catch (err) {
-    await offerOriginal(url, "The cleaned file couldn't be saved.");
+    await finish();
+    await offerOriginal(url, err.message || "The cleaning service didn't respond.");
   }
 }
+
+// Anything still marked in-flight when the worker starts was interrupted —
+// its download is already cancelled, so hand the user their original back.
+async function recoverInterrupted() {
+  const { [INFLIGHT_KEY]: rows = {} } = await actionStore.get(INFLIGHT_KEY);
+  const urls = Object.keys(rows);
+  if (!urls.length) return;
+  await actionStore.set({ [INFLIGHT_KEY]: {} });
+  for (const url of urls) {
+    await offerOriginal(url, `Cleaning ${rows[url].label || "your download"} was interrupted.`);
+  }
+}
+
+recoverInterrupted().catch(() => {});
+if (ext.runtime.onStartup) ext.runtime.onStartup.addListener(() => recoverInterrupted().catch(() => {}));
 
 ext.downloads.onCreated.addListener((item) => {
   handleDownload(item).catch(() => {
