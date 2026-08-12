@@ -6,13 +6,30 @@
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <h1>CleanThis</h1>
-  <p class="tagline">File cleaning &amp; webpage scanning by <a href="https://cleanthis.io" target="_blank" rel="noopener">cleanthis.io</a></p>
+  <header>
+    <h1>CleanThis</h1>
+    <a id="settings-link" href="#" title="Settings">Settings</a>
+  </header>
 
-  <button id="clean-file" disabled>Clean a file</button>
-  <button id="scan-page" disabled>Scan this page</button>
+  <label class="field">
+    <span>Cleaning level</span>
+    <select id="level">
+      <option value="light">Light — scan &amp; strip metadata</option>
+      <option value="standard" selected>Standard — full clean</option>
+      <option value="aggressive">Aggressive — convert to safest form</option>
+    </select>
+  </label>
 
-  <p class="note">v1 in development — these actions are wired up in upcoming releases.</p>
+  <div class="actions">
+    <button id="clean-file" type="button">Clean a file</button>
+    <button id="scan-page" type="button">Scan this page</button>
+  </div>
+  <input type="file" id="file-input" hidden>
+
+  <div id="clean-result" class="result" hidden></div>
+  <div id="scan-result" class="result" hidden></div>
+
+  <p id="quota" class="quota"></p>
 
   <script src="../lib/api.js"></script>
   <script src="popup.js"></script>
