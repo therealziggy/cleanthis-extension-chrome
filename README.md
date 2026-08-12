@@ -45,6 +45,14 @@ node build.js --zip   # also produces store-ready zips in dist/
 - **Chromium:** `chrome://extensions` → enable Developer mode → *Load unpacked* → `dist/chrome`
 - **Firefox:** `about:debugging#/runtime/this-firefox` → *Load Temporary Add-on…* → `dist/firefox/manifest.json`
 
+### Downloads
+
+Prebuilt zips for every version are on the [Releases page](../../releases) — pick
+`cleanthis-chrome-v….zip` for Chrome/Edge/Brave/Opera or `cleanthis-firefox-v….zip`
+for Firefox. Until the store listings are live these are for developers and early
+testers (loaded unpacked / as a temporary add-on, as above); once published, the
+stores handle installs and auto-updates.
+
 No bundler and no transpilation — what's in `src/` is exactly what runs. `npm ci` is
 only needed for the dev tooling (`web-ext` lint).
 
