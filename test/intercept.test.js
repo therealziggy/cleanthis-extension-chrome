@@ -70,6 +70,37 @@ test("a hostname merely ending in the base domain is not treated as ours", () =>
   assert.equal(result.intercept, true);
 });
 
+test("downloads from this machine or this network are left alone", () => {
+  // The service fetches downloads from its own location and can never reach a
+  // private address, so intercepting would break the download and send an
+  // internal address off the machine for nothing.
+  for (const url of [
+    "http://192.168.1.10/share/report.pdf",
+    "http://10.0.0.5/report.pdf",
+    "http://172.16.4.4/report.pdf",
+    "http://127.0.0.1:8080/report.pdf",
+    "http://169.254.1.1/report.pdf",
+    "http://nas/report.pdf",
+    "http://printer.local/report.pdf",
+  ]) {
+    const result = decide({ url }, ON, NONE, BASE);
+    assert.equal(result.intercept, false, url);
+    assert.equal(result.reason, "local-address", url);
+  }
+});
+
+test("public addresses that merely look similar are still intercepted", () => {
+  for (const url of ["https://172.32.0.1/a.pdf", "https://11.0.0.1/a.pdf", "https://notlocal.com/a.pdf"]) {
+    assert.equal(decide({ url }, ON, NONE, BASE).intercept, true, url);
+  }
+});
+
+test("a link carrying credentials is never sent to the service", () => {
+  const result = decide({ url: "https://user:secret@example.com/report.pdf" }, ON, NONE, BASE);
+  assert.equal(result.intercept, false);
+  assert.equal(result.reason, "credentials");
+});
+
 test("a url the user chose to download untouched is left alone", () => {
   const bypass = new Set(["https://example.com/report.pdf"]);
   const result = decide({ url: "https://example.com/report.pdf" }, ON, bypass, BASE);

@@ -144,41 +144,58 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
       { timeoutMs: 150000, arg: BASE }
     );
 
-    // The server refuses to fetch loopback addresses (its SSRF guard), so a
-    // file served from this machine can never come back cleaned. What this
-    // phase proves is the half that matters most: the raw download really is
-    // stopped, and the user is offered the original instead of losing it.
-    const guarded = await pollWorker(
+    // A file served from this machine sits on a private address the service
+    // could never fetch, so it must be left strictly alone — interrupting it
+    // would break the download for no possible benefit.
+    const local = await pollWorker(
       context,
       async () => {
         const items = await chrome.downloads.search({});
         const original = items.find((d) => d.url.includes("127.0.0.1:8080/sample.pdf"));
-        const store = chrome.storage.session || chrome.storage.local;
-        const { pendingActions = {} } = await store.get("pendingActions");
-        const offer = Object.values(pendingActions).find(
-          (a) => a.kind === "download-original" && a.url.includes("sample.pdf")
-        );
         return {
-          done: !!offer,
-          originalState: original ? original.state : "erased",
-          offered: !!offer,
+          done: !!(original && original.state === "complete"),
+          state: original ? original.state : "missing",
         };
       },
-      { timeoutMs: 60000 }
+      { timeoutMs: 45000 }
     );
-
-    record(
-      "intercept a download (raw file stopped)",
-      guarded.originalState !== "complete",
-      `original=${guarded.originalState}`
-    );
-    record(
-      "offer the original when cleaning can't proceed",
-      guarded.offered === true,
-      guarded.offered ? "" : "no download-original action was registered"
-    );
+    record("a download from this machine is left alone", !local.timeout, `original=${local.state}`);
   } catch (err) {
-    record("intercept a download (raw file stopped)", false, err.message);
+    record("a download from this machine is left alone", false, err.message);
+  }
+
+  // ── 3a. a download that can't be cleaned still reaches the user ──
+  try {
+    sw = await worker(context);
+    await sw.evaluate(async () => {
+      const store = chrome.storage.session || chrome.storage.local;
+      await store.set({ pendingActions: {} });
+      await chrome.storage.local.set({ interceptExts: ["pdf"] });
+      // A public address that 404s: the submission is accepted, the fetch
+      // fails — the most common real-world failure.
+      self.handleDownload({
+        id: 9101,
+        url: "https://cleanthis.io/no-such-file-e2e.pdf",
+        filename: "no-such-file-e2e.pdf",
+      });
+    });
+
+    const offered = await pollWorker(
+      context,
+      async () => {
+        const store = chrome.storage.session || chrome.storage.local;
+        const { pendingActions = {} } = await store.get("pendingActions");
+        return {
+          done: Object.values(pendingActions).some(
+            (a) => a.kind === "download-original" && a.url.includes("no-such-file-e2e")
+          ),
+        };
+      },
+      { timeoutMs: 90000 }
+    );
+    record("a download that can't be cleaned is offered back", !offered.timeout);
+  } catch (err) {
+    record("a download that can't be cleaned is offered back", false, err.message);
   }
 
   // ── 3b. the cleaned file actually comes back ────────────────
