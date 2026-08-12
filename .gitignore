@@ -1,0 +1,15 @@
+# Build outputs & dependencies
+node_modules/
+dist/
+*.zip
+web-ext-artifacts/
+
+# Never commit keys, credentials, or environment files
+*.pem
+.env
+.env.*
+
+# Local AI-assistant working files — deliberately untracked in this public repo
+CLAUDE.md
+.claude/
+docs-internal/

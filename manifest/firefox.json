@@ -1,0 +1,11 @@
+{
+  "background": {
+    "scripts": ["lib/api.js", "background.js"]
+  },
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "extension@cleanthis.io",
+      "strict_min_version": "115.0"
+    }
+  }
+}
