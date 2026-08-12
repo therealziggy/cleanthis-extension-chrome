@@ -8,6 +8,7 @@
     "lint:firefox": "web-ext lint --source-dir dist/firefox"
   },
   "devDependencies": {
+    "playwright-core": "^1.62.1",
     "web-ext": "^8.7.1"
   }
 }
