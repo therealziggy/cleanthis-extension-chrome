@@ -207,9 +207,32 @@ function consumeBypass(url) {
 // The popup polls while it is open. If the user closes it first, it hands the
 // job here so the result still reaches them.
 
+// Chrome shuts a background worker down after ~30 seconds of inactivity, and
+// only an extension API call resets that timer — fetch and setTimeout do not.
+// Waiting for a job is nothing but fetch and setTimeout, so a clean that takes
+// longer than half a minute (a large file, or a queue) would be killed
+// mid-flight with the download already cancelled. Touching storage on each
+// poll keeps the worker awake for as long as we are genuinely working.
+// (Anything that still gets past this — a crash, a browser restart — is caught
+// by the in-flight record and recoverInterrupted below.)
+// The key read is deliberately its own name rather than a value we happen to
+// need: it makes the keepalive visible as itself, so a test can tell a real
+// keepalive from incidental storage traffic.
+const KEEPALIVE_KEY = "keepAlivePing";
+
+function keepAlive() {
+  return () => {
+    try {
+      actionStore.get(KEEPALIVE_KEY).catch(() => {});
+    } catch (_) {
+      /* keeping the worker alive must never break the wait */
+    }
+  };
+}
+
 async function watchJob({ jobId, downloadToken, name }) {
   try {
-    const job = await api.waitForJob(jobId, downloadToken);
+    const job = await api.waitForJob(jobId, downloadToken, { onTick: keepAlive() });
     if (job.state === "completed") {
       await notify("File cleaned ✓", `${name || "Your file"} is ready.`, {
         kind: "download-cleaned",
@@ -325,7 +348,9 @@ async function handleDownload(item) {
       return;
     }
 
-    const job = await api.waitForJob(submission.jobId, submission.downloadToken);
+    const job = await api.waitForJob(submission.jobId, submission.downloadToken, {
+      onTick: keepAlive(),
+    });
 
     if (job.state !== "completed" || !job.downloadUrl) {
       await finish();

@@ -109,6 +109,75 @@ function record(name, ok, detail) {
   });
   record("three failures at once produce three offers", concurrent === 3, `offers: ${concurrent}`);
 
+  // 7. A long clean must keep the worker awake.
+  //
+  // Chrome only resets its ~30s idle timer on extension API calls; fetch and
+  // setTimeout don't count. Waiting for a job is otherwise pure fetch and
+  // setTimeout, so without a deliberate touch per poll the worker is killed
+  // mid-clean with the download already cancelled.
+  //
+  // Termination itself can't be provoked here (the debugger attachment that
+  // lets this script run also keeps the worker alive), so what this checks is
+  // the mechanism: that each poll really does call an extension API. Removing
+  // the onTick keepalive in background.js drops this count to zero.
+  const keptAwake = await sw.evaluate(async () => {
+    const store = chrome.storage.session || chrome.storage.local;
+    await chrome.storage.local.set({ interceptEnabled: true, level: "standard", interceptExts: ["pdf"] });
+
+    const realFetch = self.fetch;
+    const realDownload = chrome.downloads.download;
+    const realGet = store.get.bind(store);
+
+    let polls = 0;
+    let polling = false;
+    let touchesWhilePolling = 0;
+
+    // Count only the keepalive's own read, so incidental storage traffic
+    // can't make this look like it is working when it isn't.
+    store.get = (...args) => {
+      if (polling && args[0] === "keepAlivePing") touchesWhilePolling++;
+      return realGet(...args);
+    };
+    chrome.downloads.download = async () => 1;
+
+    // Stub the network, not the client, so the real polling loop runs and the
+    // keepalive is exercised exactly as it would be in production.
+    const reply = (body) => ({
+      ok: true,
+      status: 200,
+      headers: { get: () => null },
+      json: async () => body,
+    });
+    self.fetch = async (url) => {
+      if (url.includes("/api/form-token")) return reply({ token: "t", ttl: 300 });
+      if (url.includes("/api/sanitize-url")) return reply({ jobId: "keepalive-job", downloadToken: "d" });
+      if (url.includes("/api/job/")) {
+        polling = true;
+        polls++;
+        return reply(
+          polls < 4
+            ? { state: "processing" }
+            : { state: "completed", downloadUrl: "https://cleanthis.io/api/download/x", downloadName: "x.pdf" }
+        );
+      }
+      return reply({});
+    };
+
+    await self.handleDownload({ id: 7300, url: "https://example.com/slow.pdf", filename: "slow.pdf" });
+
+    store.get = realGet;
+    self.fetch = realFetch;
+    chrome.downloads.download = realDownload;
+    return { polls, touchesWhilePolling };
+  });
+  record(
+    "a long clean keeps the worker awake",
+    // The poll count is asserted too: a run that never polled would otherwise
+    // "pass" while testing nothing.
+    keptAwake.polls >= 3 && keptAwake.touchesWhilePolling >= keptAwake.polls - 1,
+    `${keptAwake.touchesWhilePolling} extension-API touches over ${keptAwake.polls} polls`
+  );
+
   await cleanup();
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);
