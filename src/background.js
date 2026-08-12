@@ -189,6 +189,96 @@ ext.runtime.onConnect.addListener((port) => {
   });
 });
 
+// ── download interception ─────────────────────────────────────
+// Opt-in. When a download matches, we stop it, have the server fetch and clean
+// the file, and hand back the cleaned copy. Every failure ends with the user
+// being offered the original — the extension must never be the reason someone
+// can't get their file.
+
+const handledDownloads = new Set();
+
+function offerOriginal(url, message, title = "Couldn't clean this download") {
+  return notify(title, message, { kind: "download-original", url, label: "Download original" });
+}
+
+async function handleDownload(item) {
+  // Our own downloads (the cleaned file, or one the user asked for untouched)
+  // must never come back through here.
+  if (item.byExtensionId && item.byExtensionId === ext.runtime.id) return;
+  if (handledDownloads.has(item.id)) return;
+
+  const settings = await getSettings();
+  const decision = intercept.decide(item, settings, await getBypass(), api.baseUrl);
+  if (!decision.intercept) return;
+
+  handledDownloads.add(item.id);
+  const url = item.url;
+  const label = item.filename ? item.filename.split(/[\\/]/).pop() : url;
+
+  // Stop the browser's own copy first: the point is that the raw file never
+  // lands on disk. erase() also clears the cancelled row from the downloads
+  // list so the user isn't left looking at a phantom failure.
+  try {
+    await ext.downloads.cancel(item.id);
+  } catch (_) {
+    /* already finished or gone — the clean copy is still worth fetching */
+  }
+  ext.downloads.erase({ id: item.id }).catch(() => {});
+
+  await notify("Cleaning download…", label);
+
+  let submission;
+  try {
+    submission = await api.sanitizeUrl(url, settings.level);
+  } catch (err) {
+    await offerOriginal(url, `${err.message || "The cleaning service didn't respond."}`);
+    return;
+  }
+
+  if (submission && submission.sourceWarning) {
+    await offerOriginal(
+      url,
+      `${submission.sourceWarning} Downloading it is not recommended.`,
+      "⚠️ Dangerous download blocked"
+    );
+    return;
+  }
+
+  if (!submission || !submission.jobId) {
+    await offerOriginal(url, "The cleaning service couldn't take this file.");
+    return;
+  }
+
+  let job;
+  try {
+    job = await api.waitForJob(submission.jobId, submission.downloadToken);
+  } catch (err) {
+    await offerOriginal(url, err.message || "Cleaning took too long.");
+    return;
+  }
+
+  if (job.state !== "completed" || !job.downloadUrl) {
+    await offerOriginal(url, job.error || "The file couldn't be cleaned.");
+    return;
+  }
+
+  try {
+    await ext.downloads.download({
+      url: api.baseUrl + job.downloadUrl,
+      filename: job.downloadName || undefined,
+    });
+    await notify("Download cleaned ✓", `${job.downloadName || label} was cleaned and saved.`);
+  } catch (err) {
+    await offerOriginal(url, "The cleaned file couldn't be saved.");
+  }
+}
+
+ext.downloads.onCreated.addListener((item) => {
+  handleDownload(item).catch(() => {
+    /* handleDownload reports its own failures to the user */
+  });
+});
+
 ext.runtime.onInstalled.addListener(() => {
   console.log("CleanThis installed");
 });
