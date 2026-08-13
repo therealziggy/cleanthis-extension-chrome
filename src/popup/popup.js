@@ -23,7 +23,11 @@ const els = {
   scanResult: document.getElementById("scan-result"),
   quota: document.getElementById("quota"),
   settings: document.getElementById("settings-link"),
+  pending: document.getElementById("pending"),
+  pendingList: document.getElementById("pending-list"),
 };
+
+const actionStore = ext.storage.session || ext.storage.local;
 
 // ── small helpers ─────────────────────────────────────────────
 
@@ -55,6 +59,49 @@ function humanize(err) {
   if (err.code === "network") return "Couldn't reach cleanthis.io. Check your connection.";
   if (err.code === "timeout") return "That took longer than expected. Please try again.";
   return err.message || "Something went wrong. Please try again.";
+}
+
+// ── things still waiting on the user ──────────────────────────
+// Notifications can be missed — they vanish on their own, and neither browser
+// will hold one open. Anything still undecided is listed here, where it stays
+// until it is dealt with.
+
+async function refreshPending() {
+  let actions = {};
+  try {
+    ({ pendingActions: actions = {} } = await actionStore.get("pendingActions"));
+  } catch (_) {
+    /* nothing to show is the safe default */
+  }
+
+  const entries = Object.entries(actions);
+  els.pendingList.textContent = "";
+  els.pending.hidden = entries.length === 0;
+
+  for (const [id, action] of entries) {
+    const row = document.createElement("li");
+    row.append(text("span", "pending-name", action.name || action.url || "A download"));
+    if (action.why) row.append(text("span", "pending-why", action.why));
+
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = action.label && /unsafe/i.test(action.label) ? "danger" : "";
+    button.textContent = action.label || "Continue";
+    button.addEventListener("click", async () => {
+      button.disabled = true;
+      try {
+        // The background script owns what these actions actually do, so the
+        // popup only asks — the same path a notification click takes.
+        await ext.runtime.sendMessage({ type: "runAction", id });
+      } catch (_) {
+        /* refreshing below shows whether it worked */
+      }
+      await refreshPending();
+    });
+
+    row.append(button);
+    els.pendingList.append(row);
+  }
 }
 
 async function refreshQuota() {
@@ -252,3 +299,5 @@ els.fileInput.addEventListener("change", async () => {
 });
 
 refreshQuota();
+
+refreshPending();

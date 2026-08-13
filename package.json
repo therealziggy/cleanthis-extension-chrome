@@ -1,6 +1,6 @@
 {
   "name": "cleanthis-extension",
-  "version": "0.2.1",
+  "version": "0.3.0",
   "private": true,
   "description": "Dev tooling for the CleanThis browser extension (the extension itself is plain JavaScript — no bundler).",
   "scripts": {

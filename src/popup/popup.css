@@ -140,6 +140,58 @@ button:disabled { opacity: 0.55; cursor: default; }
 
 .progress { color: var(--muted); }
 
+/* Things still waiting on a decision — deliberately at the top, and styled to
+   read as unfinished business rather than a status line. */
+.pending {
+  margin-bottom: 12px;
+  padding: 10px;
+  border: 1px solid #fbbf24;
+  border-radius: 6px;
+  background: #fffbeb;
+}
+
+.pending h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #92400e;
+}
+
+.pending ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.pending li {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.pending li + li {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid #fde68a;
+}
+
+.pending-name {
+  font-weight: 600;
+  word-break: break-word;
+}
+
+.pending-why {
+  font-size: 12px;
+  color: #6b7280;
+}
+
+.pending button.danger {
+  background: #b91c1c;
+  border-color: #b91c1c;
+  color: #fff;
+}
+
 .quota {
   margin: 12px 0 0;
   color: var(--muted);
