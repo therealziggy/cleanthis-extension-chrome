@@ -25,7 +25,9 @@ Features:
 - **Download protection** (opt-in, **off by default**) — intercepts risky file
   downloads, has cleanthis.io fetch and sanitize the file server-side, and hands you
   the cleaned copy instead. Every failure path offers a one-click "download the
-  original anyway" — the extension never makes a file unreachable.
+  original anyway" — the extension never makes a file unreachable. Anything still
+  waiting on you shows as a count on the toolbar icon and stays listed in the popup,
+  so a notification you miss costs you nothing.
 
 cleanthis.io allows a set number of scans and files per day per user. The extension
 shows what's left, and pauses instead of retrying when the allowance runs out or the

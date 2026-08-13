@@ -178,6 +178,61 @@ function record(name, ok, detail) {
     `${keptAwake.touchesWhilePolling} extension-API touches over ${keptAwake.polls} polls`
   );
 
+  // 8. Notifications are a nudge, not the only route.
+  //
+  // Neither browser will hold a notification open until the user acts, so a
+  // pending offer has to outlive the toast: it stays on the badge and in the
+  // popup's list until it is dealt with.
+  const outlivesToast = await sw.evaluate(async () => {
+    const store = chrome.storage.session || chrome.storage.local;
+    await store.set({ pendingActions: {} });
+
+    const real = self.CleanThisApi.sanitizeUrl;
+    self.CleanThisApi.sanitizeUrl = async () => { throw new Error("service down"); };
+    await self.handleDownload({ id: 7400, url: "https://example.com/toast.pdf", filename: "toast.pdf" });
+    self.CleanThisApi.sanitizeUrl = real;
+
+    const { pendingActions = {} } = await store.get("pendingActions");
+    const [id] = Object.keys(pendingActions);
+    const badgeAfterOffer = await chrome.action.getBadgeText({});
+
+    // The user closes the toast without acting on it.
+    if (id) await new Promise((r) => chrome.notifications.clear(id, () => r()));
+    const { pendingActions: afterDismiss = {} } = await store.get("pendingActions");
+
+    // …and later opens the popup and uses the row.
+    const realDownload = chrome.downloads.download;
+    let started = null;
+    chrome.downloads.download = async (opts) => { started = opts.url; return 1; };
+    if (id) await self.runAction(id);
+    chrome.downloads.download = realDownload;
+
+    const { pendingActions: afterUse = {} } = await store.get("pendingActions");
+    const badgeAfterUse = await chrome.action.getBadgeText({});
+
+    return {
+      offerHasName: !!(id && pendingActions[id].name),
+      badgeAfterOffer,
+      survivedDismissal: !!(id && afterDismiss[id]),
+      started,
+      clearedAfterUse: !(id && afterUse[id]),
+      badgeAfterUse,
+    };
+  });
+  record(
+    "an offer survives a dismissed notification",
+    outlivesToast.survivedDismissal === true && outlivesToast.offerHasName === true
+  );
+  record(
+    "the badge counts what is waiting, and clears when it is dealt with",
+    outlivesToast.badgeAfterOffer === "1" && outlivesToast.badgeAfterUse === "",
+    `badge "${outlivesToast.badgeAfterOffer}" → "${outlivesToast.badgeAfterUse}"`
+  );
+  record(
+    "the popup's row does the same thing the notification would",
+    outlivesToast.started === "https://example.com/toast.pdf" && outlivesToast.clearedAfterUse === true
+  );
+
   await cleanup();
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

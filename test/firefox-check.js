@@ -78,13 +78,17 @@ const timer = setInterval(() => {
 
 function finish(report) {
   console.log(`Firefox probe ran at ${report.ranAt}\n`);
-  const flag = (v) =>
-    /MISSING|NOT GRANTED|THREW|^NO$|REJECTED/.test(String(v)) ? "  ⚠️ " : "  ✓ ";
+  const isProblem = (v) => /MISSING|NOT GRANTED|THREW|^NO$/.test(String(v));
+  const isKnown = (v) => /^BY DESIGN/.test(String(v));
+  const flag = (v) => (isProblem(v) ? "  ⚠️ " : isKnown(v) ? "  · " : "  ✓ ");
   for (const { name, value } of report.results) {
     console.log(`${flag(value)}${name}: ${value}`);
   }
-  const problems = report.results.filter((r) => /MISSING|NOT GRANTED|THREW|^NO$/.test(String(r.value)));
-  console.log(`\n${report.results.length - problems.length}/${report.results.length} checks clean`);
+  const problems = report.results.filter((r) => isProblem(r.value));
+  const known = report.results.filter((r) => isKnown(r.value));
+  console.log(
+    `\n${report.results.length - problems.length - known.length} clean · ${known.length} known constraint(s) already designed around · ${problems.length} needing a decision`
+  );
   if (problems.length) {
     console.log("\nNeeds a decision:");
     for (const p of problems) console.log(`  - ${p.name}: ${p.value}`);

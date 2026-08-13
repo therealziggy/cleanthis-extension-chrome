@@ -20,10 +20,6 @@ const ext = typeof browser !== "undefined" ? browser : chrome;
 const api = self.CleanThisApi;
 const intercept = self.CleanThisIntercept;
 
-// Firefox notifications support neither buttons nor a "requireInteraction"
-// flag, so there the whole notification body is the click target.
-const IS_FIREFOX = typeof browser !== "undefined" && typeof browser.runtime.getBrowserInfo === "function";
-
 const DEFAULT_SETTINGS = {
   interceptEnabled: false,
   level: "standard",
@@ -59,7 +55,7 @@ function updateStore(key, mutate, fallback) {
 }
 
 function rememberAction(notificationId, action) {
-  return updateStore(ACTIONS_KEY, (actions) => ({ ...actions, [notificationId]: action }), {});
+  return updateStore(ACTIONS_KEY, (actions) => ({ ...actions, [notificationId]: action }), {}).then(refreshBadge);
 }
 
 async function peekAction(notificationId) {
@@ -78,29 +74,29 @@ function clearAction(notificationId) {
       return next;
     },
     {}
-  );
+  ).then(refreshBadge);
 }
 
 // ── notifications ─────────────────────────────────────────────
 
 let notificationSeq = 0;
 
+// One notification shape for every browser. Firefox supports neither buttons
+// nor a notification that waits for the user, so relying on either would mean
+// two designs and a promise we could only keep on Chrome. Instead the
+// notification is a nudge that may well be missed, and anything the user still
+// needs to act on stays on the toolbar badge and in the popup until it is
+// dealt with.
 async function notify(title, message, action) {
   const id = `cleanthis-${Date.now()}-${notificationSeq++}`;
   const options = {
     type: "basic",
     iconUrl: ext.runtime.getURL("icons/icon-128.png"),
     title,
-    message,
+    message: action
+      ? `${message}\n(Click here to ${(action.label || "continue").toLowerCase()}, or open CleanThis.)`
+      : message,
   };
-  // The button label doubles as the hint for Firefox, where the message has
-  // to carry the call to action itself.
-  if (action && !IS_FIREFOX) {
-    options.buttons = [{ title: action.label || "Download" }];
-    options.requireInteraction = true;
-  } else if (action && IS_FIREFOX) {
-    options.message = `${message}\n(Click this notification to ${(action.label || "continue").toLowerCase()}.)`;
-  }
 
   await new Promise((resolve) => {
     try {
@@ -112,6 +108,19 @@ async function notify(title, message, action) {
 
   if (action) await rememberAction(id, action);
   return id;
+}
+
+// The badge is the part that doesn't disappear: it says how many things are
+// still waiting for a decision, and the popup lists them.
+async function refreshBadge() {
+  try {
+    const { [ACTIONS_KEY]: actions = {} } = await actionStore.get(ACTIONS_KEY);
+    const count = Object.keys(actions).length;
+    await ext.action.setBadgeText({ text: count ? String(count) : "" });
+    if (count) await ext.action.setBadgeBackgroundColor({ color: "#dc2626" });
+  } catch (_) {
+    /* the badge is a convenience; never let it break the flow */
+  }
 }
 
 // ── running a remembered action ───────────────────────────────
@@ -158,23 +167,15 @@ async function runAction(notificationId) {
   }
 }
 
-ext.notifications.onButtonClicked.addListener((notificationId) => {
-  runAction(notificationId).finally(() => ext.notifications.clear(notificationId));
-});
-
-// A body click means "yes, do the thing" on both platforms. Chrome also shows
-// a button, but plenty of people click the notification itself — treating that
-// as a dismissal would throw away the only route back to the file.
+// The whole notification is the click target — the one gesture both browsers
+// agree on.
 ext.notifications.onClicked.addListener((notificationId) => {
   runAction(notificationId).finally(() => ext.notifications.clear(notificationId));
 });
 
-// A dismissed notification must not strand the offer in storage forever.
-if (ext.notifications.onClosed) {
-  ext.notifications.onClosed.addListener((notificationId, byUser) => {
-    if (byUser) clearAction(notificationId);
-  });
-}
+// A dismissed notification must NOT drop the offer: the popup is now where it
+// lives, and dismissing a toast isn't a decision about the file. The entry is
+// only cleared once its action has actually been carried out.
 
 // ── bypass list ───────────────────────────────────────────────
 // URLs the user chose to download untouched. Capped so a long session can't
@@ -239,6 +240,8 @@ async function watchJob({ jobId, downloadToken, name }) {
         jobId,
         token: downloadToken,
         label: "Save file",
+        name: name || "Your cleaned file",
+        why: "Cleaned and ready to save.",
       });
     } else if (job.state === "failed") {
       await notify("Cleaning failed", job.error || "Please try again.");
@@ -283,8 +286,25 @@ async function alreadyOnDisk(id) {
   }
 }
 
-function offerOriginal(url, message, title = "Couldn't clean this download", label = "Download original") {
-  return notify(title, message, { kind: "download-original", url, label });
+function offerOriginal(url, message, title = "Couldn't clean this download", label = "Download original", name) {
+  return notify(title, message, {
+    kind: "download-original",
+    url,
+    label,
+    // What the popup shows for this row, so a missed notification still leaves
+    // the user something they can recognise.
+    name: name || fileNameOf(url),
+    why: message,
+  });
+}
+
+function fileNameOf(url) {
+  try {
+    const last = new URL(url).pathname.split("/").filter(Boolean).pop();
+    return last ? decodeURIComponent(last) : url;
+  } catch (_) {
+    return url;
+  }
 }
 
 async function handleDownload(item) {
@@ -351,14 +371,15 @@ async function handleDownload(item) {
         url,
         `${submission.sourceWarning} We strongly recommend not downloading it.`,
         "⚠️ Dangerous download stopped",
-        "Download anyway (unsafe)"
+        "Download anyway (unsafe)",
+        label
       );
       return;
     }
 
     if (!submission || !submission.jobId) {
       await finish();
-      await offerOriginal(url, "The cleaning service couldn't take this file.");
+      await offerOriginal(url, "The cleaning service couldn't take this file.", undefined, undefined, label);
       return;
     }
 
@@ -368,7 +389,7 @@ async function handleDownload(item) {
 
     if (job.state !== "completed" || !job.downloadUrl) {
       await finish();
-      await offerOriginal(url, job.error || "The file couldn't be cleaned.");
+      await offerOriginal(url, job.error || "The file couldn't be cleaned.", undefined, undefined, label);
       return;
     }
 
@@ -382,7 +403,7 @@ async function handleDownload(item) {
     await notify("Download cleaned ✓", `Saving ${job.downloadName || label}.`);
   } catch (err) {
     await finish();
-    await offerOriginal(url, err.message || "The cleaning service didn't respond.");
+    await offerOriginal(url, err.message || "The cleaning service didn't respond.", undefined, undefined, label);
   }
 }
 
@@ -394,12 +415,24 @@ async function recoverInterrupted() {
   if (!urls.length) return;
   await actionStore.set({ [INFLIGHT_KEY]: {} });
   for (const url of urls) {
-    await offerOriginal(url, `Cleaning ${rows[url].label || "your download"} was interrupted.`);
+    await offerOriginal(url, `Cleaning ${rows[url].label || "your download"} was interrupted.`, undefined, undefined, rows[url].label);
   }
 }
 
 recoverInterrupted().catch(() => {});
+refreshBadge();
 if (ext.runtime.onStartup) ext.runtime.onStartup.addListener(() => recoverInterrupted().catch(() => {}));
+
+// The popup lists whatever is still pending and asks us to carry it out, so
+// the actual doing stays here in one place whether it was started from a
+// notification or from the popup.
+ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+  if (!message || message.type !== "runAction") return undefined;
+  runAction(message.id)
+    .then(() => sendResponse({ ok: true }))
+    .catch(() => sendResponse({ ok: false }));
+  return true;
+});
 
 ext.downloads.onCreated.addListener((item) => {
   handleDownload(item).catch(() => {

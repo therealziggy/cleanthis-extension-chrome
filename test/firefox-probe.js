@@ -14,11 +14,15 @@
   const results = [];
   const record = (name, value) => results.push({ name, value });
 
-  const attempt = async (name, fn) => {
+  const attempt = async (name, fn, expected) => {
     try {
       record(name, await fn());
     } catch (err) {
-      record(name, `THREW: ${err && err.message ? err.message : String(err)}`);
+      const detail = err && err.message ? err.message : String(err);
+      // Some of these are checked precisely because they are known not to
+      // work: recording them as expected keeps a settled decision from
+      // looking like a new problem on every run.
+      record(name, expected ? `${expected} — ${detail}` : `THREW: ${detail}`);
     }
   };
 
@@ -72,7 +76,7 @@
       buttons: [{ title: "Download original" }],
     });
     return "accepted (buttons supported)";
-  });
+  }, "BY DESIGN: unsupported on Firefox, so we never send buttons on any browser");
   await attempt("notification WITH requireInteraction", async () => {
     await browser.notifications.create("probe-sticky", {
       type: "basic",
@@ -82,7 +86,7 @@
       requireInteraction: true,
     });
     return "accepted";
-  });
+  }, "BY DESIGN: unsupported on Firefox, so notifications are never sticky anywhere");
   await attempt("notifications.onButtonClicked", () =>
     browser.notifications.onButtonClicked ? "present" : "MISSING (no button clicks to listen for)"
   );
@@ -96,10 +100,26 @@
       await browser.downloads.cancel(9999999);
       return "RESOLVED (same as Chromium)";
     } catch (err) {
-      return `REJECTED: ${err && err.message ? err.message : String(err)}`;
+      return `BY DESIGN: rejects here, resolves on Chromium — we check the download's state instead (${err && err.message ? err.message : String(err)})`;
     }
   });
   await attempt("downloads.onCreated", () => (browser.downloads.onCreated ? "present" : "MISSING"));
+
+  // The badge + popup list are what replaced notification buttons, so they
+  // have to work here or the recovery design doesn't hold on Firefox.
+  await attempt("action.setBadgeText", async () => {
+    await browser.action.setBadgeText({ text: "1" });
+    const readBack = await browser.action.getBadgeText({});
+    await browser.action.setBadgeText({ text: "" });
+    return `works — read back "${readBack}"`;
+  });
+  await attempt("action.setBadgeBackgroundColor", async () => {
+    await browser.action.setBadgeBackgroundColor({ color: "#dc2626" });
+    return "accepted";
+  });
+  await attempt("runtime.onMessage (popup → background)", () =>
+    browser.runtime.onMessage ? "present" : "MISSING"
+  );
 
   // Event-page lifetime knobs we rely on.
   await attempt("runtime.onStartup", () => (browser.runtime.onStartup ? "present" : "MISSING"));
