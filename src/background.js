@@ -271,6 +271,18 @@ ext.runtime.onConnect.addListener((port) => {
 
 const handledDownloads = new Set();
 
+// Did this download complete despite the cancel? Treated as "yes" only on a
+// definite answer — if the lookup itself fails we carry on with the clean,
+// because the alternative is skipping silently.
+async function alreadyOnDisk(id) {
+  try {
+    const [row] = await ext.downloads.search({ id });
+    return !!row && row.state === "complete";
+  } catch (_) {
+    return false;
+  }
+}
+
 function offerOriginal(url, message, title = "Couldn't clean this download", label = "Download original") {
   return notify(title, message, { kind: "download-original", url, label });
 }
@@ -304,16 +316,18 @@ async function handleDownload(item) {
   // disk. The cancelled row is deliberately LEFT in the downloads list — it is
   // the browser's own retry affordance, and it stays as a second way back to
   // the file if anything below goes wrong or this worker is shut down.
-  let cancelled = true;
   try {
     await ext.downloads.cancel(item.id);
   } catch (_) {
-    // Already finished: the untouched file is on disk. Say nothing further —
-    // hiding it would be worse than a file the user knowingly downloaded.
-    cancelled = false;
+    /* whether this throws is browser-specific; the state check below decides */
   }
 
-  if (!cancelled) return;
+  // Ask what actually happened rather than trusting the call: cancelling a
+  // download that already finished throws on Firefox but resolves on Chromium,
+  // so the return value alone would mean two different things. If the file
+  // landed anyway, leave it — the user has it, and quietly cleaning behind a
+  // file they can already see would be worse than doing nothing.
+  if (await alreadyOnDisk(item.id)) return;
 
   // Note the work before the long wait. If the worker is suspended mid-clean,
   // the next startup finds this record and offers the original.
