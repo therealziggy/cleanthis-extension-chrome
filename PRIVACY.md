@@ -21,6 +21,10 @@ download matching your chosen file types is sent to cleanthis.io so the service 
 fetch the file, clean it, and give you the cleaned copy. The file contents are not read
 by the extension.
 
+The extension also periodically fetches its **file-type catalogue** from cleanthis.io —
+the list of types the settings page can offer. That request is a plain configuration
+download and carries nothing about you: no addresses, no files, no identifiers.
+
 ## What is never sent
 
 - Your browsing history. The extension does not watch pages you visit, and has no
