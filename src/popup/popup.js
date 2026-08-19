@@ -109,10 +109,54 @@ els.settings.addEventListener("click", (event) => {
   ext.runtime.openOptionsPage();
 });
 
-// ── clean a file: opens the dedicated tab page ────────────────
+// ── clean a file: opens the dedicated cleaning window ─────────
+// A compact popup-type window rather than a tab: it feels like the popup
+// stayed open, but being a real window it survives the file dialog (a popup
+// never can — the reason cleaning left the popup in v0.4). If a cleaning
+// window is already open, focus it instead of stacking another.
 
-els.cleanBtn.addEventListener("click", () => {
-  ext.tabs.create({ url: ext.runtime.getURL("clean/clean.html") });
+const CLEAN_WINDOW_KEY = "cleanWindowId";
+const windowStore = ext.storage.session || ext.storage.local;
+
+els.cleanBtn.addEventListener("click", async () => {
+  try {
+    const { [CLEAN_WINDOW_KEY]: existingId } = await windowStore.get(CLEAN_WINDOW_KEY);
+    if (existingId !== undefined) {
+      await ext.windows.update(existingId, { focused: true });
+      window.close();
+      return;
+    }
+  } catch (_) {
+    /* window is gone — open a fresh one below */
+  }
+
+  const width = 560;
+  const height = 660;
+  let position = {};
+  try {
+    // Centre on the browser window the user is looking at.
+    const current = await ext.windows.getCurrent();
+    position = {
+      left: Math.max(0, Math.round(current.left + (current.width - width) / 2)),
+      top: Math.max(0, Math.round(current.top + (current.height - height) / 2)),
+    };
+  } catch (_) {
+    /* the window manager's default placement is fine */
+  }
+
+  try {
+    const win = await ext.windows.create({
+      url: ext.runtime.getURL("clean/clean.html"),
+      type: "popup",
+      width,
+      height,
+      ...position,
+    });
+    await windowStore.set({ [CLEAN_WINDOW_KEY]: win.id });
+  } catch (_) {
+    // A window manager that refuses popup windows still gets the feature.
+    ext.tabs.create({ url: ext.runtime.getURL("clean/clean.html") });
+  }
   window.close();
 });
 

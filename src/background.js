@@ -470,6 +470,19 @@ ext.downloads.onCreated.addListener((item) => {
   });
 });
 
+// The popup re-focuses an already-open cleaning window by its stored id;
+// forget the id the moment that window closes so a stale one can never
+// focus something unrelated.
+ext.windows.onRemoved.addListener(async (windowId) => {
+  try {
+    const store = ext.storage.session || ext.storage.local;
+    const { cleanWindowId } = await store.get("cleanWindowId");
+    if (cleanWindowId === windowId) await store.remove("cleanWindowId");
+  } catch (_) {
+    /* the popup's focus attempt self-heals by opening a fresh window */
+  }
+});
+
 // ── flagged-site warnings (opt-in, default OFF) ───────────────
 // The visited address is checked ON THIS DEVICE against a downloaded list —
 // it never leaves the machine. tabs.onUpdated itself needs no permission;
