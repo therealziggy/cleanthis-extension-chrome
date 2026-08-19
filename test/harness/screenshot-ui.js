@@ -87,7 +87,7 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
   // ── clean page (idle drop zone) ───────────────────────────
   const clean = await context.newPage();
   await clean.goto(`chrome-extension://${extensionId}/clean/clean.html`, { waitUntil: "load" });
-  await clean.setViewportSize({ width: 700, height: 620 });
+  await clean.setViewportSize({ width: 560, height: 660 });
   await shoot(clean, "clean", "light");
   await shoot(clean, "clean", "dark");
 
