@@ -1,25 +1,18 @@
 // CleanThis — popup logic.
 //
-// Two actions: clean a file, or scan the page in the active tab. Both call the
-// server through lib/api.js and render the result inline.
-//
-// A cleaning job can outlast the popup (any click outside closes it), so the
-// popup opens a port to the background script and hands the job over if it is
-// still running when the popup goes away.
+// The popup is scan-and-status only: scan the active tab, list anything still
+// waiting on the user, show the day's allowance. File cleaning lives on its
+// own tab page (clean/clean.html) — a popup dies the moment the native file
+// dialog takes focus, so picking files here could never be reliable.
 
 "use strict";
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 const api = self.CleanThisApi;
 
-const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
-
 const els = {
-  level: document.getElementById("level"),
   cleanBtn: document.getElementById("clean-file"),
   scanBtn: document.getElementById("scan-page"),
-  fileInput: document.getElementById("file-input"),
-  cleanResult: document.getElementById("clean-result"),
   scanResult: document.getElementById("scan-result"),
   quota: document.getElementById("quota"),
   settings: document.getElementById("settings-link"),
@@ -43,11 +36,6 @@ function text(tag, className, value) {
   if (className) node.className = className;
   if (value !== undefined) node.textContent = value;
   return node;
-}
-
-function busy(isBusy) {
-  els.cleanBtn.disabled = isBusy;
-  els.scanBtn.disabled = isBusy;
 }
 
 // Turns an ApiError into something a person can act on.
@@ -116,19 +104,16 @@ async function refreshQuota() {
   }
 }
 
-// ── level preference ──────────────────────────────────────────
-
-ext.storage.local.get(["level"]).then(({ level }) => {
-  if (level) els.level.value = level;
-});
-
-els.level.addEventListener("change", () => {
-  ext.storage.local.set({ level: els.level.value });
-});
-
 els.settings.addEventListener("click", (event) => {
   event.preventDefault();
   ext.runtime.openOptionsPage();
+});
+
+// ── clean a file: opens the dedicated tab page ────────────────
+
+els.cleanBtn.addEventListener("click", () => {
+  ext.tabs.create({ url: ext.runtime.getURL("clean/clean.html") });
+  window.close();
 });
 
 // ── scan this page ────────────────────────────────────────────
@@ -177,7 +162,6 @@ function renderScan(url, result) {
 }
 
 els.scanBtn.addEventListener("click", async () => {
-  els.cleanResult.hidden = true;
   const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
   const url = tab && tab.url;
 
@@ -186,7 +170,7 @@ els.scanBtn.addEventListener("click", async () => {
     return;
   }
 
-  busy(true);
+  els.scanBtn.disabled = true;
   show(els.scanResult, { html: text("span", "progress", "Scanning…") });
   try {
     const result = await api.scanUrl(url, "standard");
@@ -194,107 +178,8 @@ els.scanBtn.addEventListener("click", async () => {
   } catch (err) {
     show(els.scanResult, { html: text("span", null, humanize(err)), error: true });
   } finally {
-    busy(false);
+    els.scanBtn.disabled = false;
     refreshQuota();
-  }
-});
-
-// ── clean a file ──────────────────────────────────────────────
-
-els.cleanBtn.addEventListener("click", () => els.fileInput.click());
-
-els.fileInput.addEventListener("change", async () => {
-  const file = els.fileInput.files && els.fileInput.files[0];
-  els.fileInput.value = "";
-  if (!file) return;
-
-  els.scanResult.hidden = true;
-
-  if (file.size > MAX_UPLOAD_BYTES) {
-    show(els.cleanResult, { html: text("span", null, "That file is over the 50 MB limit."), error: true });
-    return;
-  }
-
-  busy(true);
-  show(els.cleanResult, { html: text("span", "progress", `Uploading ${file.name}…`) });
-
-  // Hand the job to the background script if this popup closes mid-flight.
-  const port = ext.runtime.connect({ name: "job-watch" });
-  let handedOver = false;
-
-  try {
-    const job = await api.sanitizeFile(file, els.level.value);
-    port.postMessage({ jobId: job.jobId, downloadToken: job.downloadToken, name: file.name });
-    handedOver = true;
-
-    show(els.cleanResult, { html: text("span", "progress", "Cleaning…") });
-    const finished = await api.waitForJob(job.jobId, job.downloadToken, {
-      onTick: (snapshot) => {
-        if (snapshot.state === "queued") show(els.cleanResult, { html: text("span", "progress", "Waiting for a slot…") });
-      },
-    });
-
-    if (finished.state === "completed") {
-      const wrap = document.createDocumentFragment();
-      wrap.append(text("p", null, `${finished.downloadName || file.name} is ready.`));
-      const save = document.createElement("button");
-      save.textContent = "Save cleaned file";
-      const note = text("p", "driver");
-      save.addEventListener("click", async () => {
-        // Download links are signed and short-lived, so ask for a fresh one
-        // at click time rather than reusing the one from completion.
-        save.disabled = true;
-        note.textContent = "";
-        try {
-          const fresh = await api.getJob(job.jobId, job.downloadToken);
-          const url = fresh && fresh.state === "completed" ? api.resolveUrl(fresh.downloadUrl) : null;
-          if (!url) throw new api.ApiError("Cleaned files are only kept for a few minutes. Clean it again for a fresh copy.");
-          await ext.downloads.download({ url, filename: fresh.downloadName || undefined });
-          // Only now is the file genuinely the user's; until this point the
-          // background worker stays on the job in case the popup disappears.
-          port.postMessage({ done: true });
-          note.textContent = "Saved.";
-        } catch (err) {
-          // Leave the button usable — the job is valid for a few more minutes
-          // and a second click often just works.
-          note.textContent = humanize(err);
-        }
-        save.disabled = false;
-      });
-      wrap.append(save);
-      wrap.append(note);
-      show(els.cleanResult, { html: wrap });
-    } else if (finished.state === "cancelled") {
-      port.postMessage({ done: true });
-      show(els.cleanResult, { html: text("span", null, "That job was cancelled."), error: true });
-    } else {
-      // The failure is on screen already; no need for the background worker to
-      // repeat it as a notification.
-      port.postMessage({ done: true });
-      show(els.cleanResult, {
-        html: text("span", null, finished.error || "Cleaning failed. Please try again."),
-        error: true,
-      });
-    }
-  } catch (err) {
-    if (handedOver) {
-      // The background script is still watching; say so rather than implying
-      // the job died.
-      show(els.cleanResult, {
-        html: text("span", null, `${humanize(err)} You'll get a notification if it finishes.`),
-        error: true,
-      });
-    } else {
-      show(els.cleanResult, { html: text("span", null, humanize(err)), error: true });
-    }
-  } finally {
-    busy(false);
-    refreshQuota();
-    try {
-      port.disconnect();
-    } catch (_) {
-      /* already gone */
-    }
   }
 });
 

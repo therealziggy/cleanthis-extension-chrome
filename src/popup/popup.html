@@ -3,22 +3,15 @@
 <head>
   <meta charset="utf-8">
   <title>CleanThis</title>
+  <link rel="stylesheet" href="../lib/ui.css">
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
-  <header>
+  <header class="ct-header">
+    <img src="../icons/icon-32.png" alt="" width="20" height="20">
     <h1>CleanThis</h1>
     <a id="settings-link" href="#" title="Settings">Settings</a>
   </header>
-
-  <label class="field">
-    <span>Cleaning level</span>
-    <select id="level">
-      <option value="light">Light — scan &amp; strip metadata</option>
-      <option value="standard" selected>Standard — full clean</option>
-      <option value="aggressive">Aggressive — convert to safest form</option>
-    </select>
-  </label>
 
   <section id="pending" class="pending" hidden>
     <h2>Needs your attention</h2>
@@ -26,12 +19,16 @@
   </section>
 
   <div class="actions">
-    <button id="clean-file" type="button">Clean a file</button>
-    <button id="scan-page" type="button">Scan this page</button>
+    <button id="scan-page" type="button">
+      Scan this page
+      <span class="btn-sub">Standard scan</span>
+    </button>
+    <button id="clean-file" type="button" class="secondary">
+      Clean a file…
+      <span class="btn-sub">opens in a tab</span>
+    </button>
   </div>
-  <input type="file" id="file-input" hidden>
 
-  <div id="clean-result" class="result" hidden></div>
   <div id="scan-result" class="result" hidden></div>
 
   <p id="quota" class="quota"></p>

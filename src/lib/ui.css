@@ -1,0 +1,152 @@
+/* CleanThis — shared look for every extension surface (popup, clean page,
+   options, warning). Brand palette matches cleanthis.io: teal primary, deep
+   navy ink, lime accent. Pages layer their own layout CSS on top. */
+
+:root {
+  --ct-primary: #3fa89b;
+  --ct-primary-strong: #2a7e80;
+  --ct-ink: #1b4d6b;
+  --ct-accent: #a8d85c;
+  --ct-accent-tint: #f2f9e4;
+  --ct-green: #16a34a;
+  --ct-amber: #d97706;
+  --ct-red: #dc2626;
+  --ct-gray: #6b7280;
+  --ct-muted: #64748b;
+  --ct-line: #dbe4e9;
+  --ct-bg: #ffffff;
+  --ct-card: #f7fafb;
+  --ct-text: #17303f;
+  --ct-error-bg: #fef2f2;
+  --ct-error-line: #fecaca;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --ct-primary: #4db8aa;
+    --ct-primary-strong: #67c6b9;
+    --ct-ink: #d7e8f1;
+    --ct-accent: #a8d85c;
+    --ct-accent-tint: #2c3a24;
+    --ct-muted: #93a6b2;
+    --ct-line: #33454f;
+    --ct-bg: #14232c;
+    --ct-card: #1b2f3a;
+    --ct-text: #e6eef3;
+    --ct-error-bg: #3f1d1d;
+    --ct-error-line: #7f1d1d;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+  color: var(--ct-text);
+  background: var(--ct-bg);
+}
+
+/* ── header shared by all surfaces ─────────────────────────── */
+
+.ct-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.ct-header img { display: block; border-radius: 4px; }
+
+.ct-header h1 {
+  flex: 1;
+  margin: 0;
+  font-size: 17px;
+  letter-spacing: -0.01em;
+  color: var(--ct-ink);
+}
+
+.ct-header .ct-surface {
+  font-weight: 500;
+  color: var(--ct-muted);
+}
+
+.ct-header a {
+  color: var(--ct-muted);
+  font-size: 12px;
+  text-decoration: none;
+}
+
+.ct-header a:hover { text-decoration: underline; color: var(--ct-primary); }
+
+/* ── controls ──────────────────────────────────────────────── */
+
+button {
+  padding: 9px 12px;
+  font: inherit;
+  font-weight: 600;
+  color: #fff;
+  background: var(--ct-primary);
+  border: 0;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+button:hover:not(:disabled) { background: var(--ct-primary-strong); }
+button:disabled { opacity: 0.55; cursor: default; }
+
+select {
+  width: 100%;
+  padding: 7px;
+  font: inherit;
+  color: inherit;
+  background: var(--ct-bg);
+  border: 1px solid var(--ct-line);
+  border-radius: 8px;
+}
+
+/* ── results / verdicts ────────────────────────────────────── */
+
+.result {
+  margin-top: 12px;
+  padding: 10px 12px;
+  background: var(--ct-card);
+  border: 1px solid var(--ct-line);
+  border-radius: 8px;
+  line-height: 1.45;
+  overflow-wrap: anywhere;
+}
+
+.result.error { border-color: var(--ct-error-line); background: var(--ct-error-bg); }
+
+.result a { color: var(--ct-primary-strong); }
+
+.progress { color: var(--ct-muted); }
+
+.driver {
+  margin: 6px 0 0;
+  color: var(--ct-muted);
+  font-size: 12px;
+}
+
+.verdict {
+  display: inline-block;
+  margin-bottom: 8px;
+  padding: 3px 9px;
+  color: #fff;
+  font-weight: 700;
+  font-size: 12px;
+  border-radius: 999px;
+}
+
+.verdict-clean { background: var(--ct-green); }
+.verdict-suspicious { background: var(--ct-amber); }
+.verdict-malicious { background: var(--ct-red); }
+.verdict-unreachable { background: var(--ct-gray); }
+
+.quota {
+  margin: 12px 0 0;
+  color: var(--ct-muted);
+  font-size: 11px;
+  text-align: center;
+}
