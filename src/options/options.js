@@ -15,6 +15,8 @@ const fileTypes = self.CleanThisFileTypes;
 
 const els = {
   enabled: document.getElementById("intercept-enabled"),
+  flagged: document.getElementById("flagged-enabled"),
+  flaggedStatus: document.getElementById("flagged-status"),
   level: document.getElementById("level"),
   groups: document.getElementById("type-groups"),
   restore: document.getElementById("restore-exts"),
@@ -84,6 +86,7 @@ els.restore.addEventListener("click", async () => {
 async function load() {
   const stored = await ext.storage.local.get([
     "interceptEnabled",
+    "flaggedEnabled",
     "level",
     "interceptExts",
     "quota_scan",
@@ -92,6 +95,16 @@ async function load() {
 
   els.enabled.checked = stored.interceptEnabled === true;
   els.level.value = stored.level || "standard";
+
+  // The toggle reflects reality: enabled AND the permission still held (it
+  // can be revoked from the browser's own extension settings at any time).
+  let flaggedPerm = false;
+  try {
+    flaggedPerm = await ext.permissions.contains({ permissions: ["tabs"] });
+  } catch (_) {
+    flaggedPerm = false;
+  }
+  els.flagged.checked = stored.flaggedEnabled === true && flaggedPerm;
 
   ({ payload: catalogue } = await fileTypes.getConfig(ext));
   renderGroups(catalogue, fileTypes.effectiveExts(stored.interceptExts, catalogue));
@@ -108,6 +121,36 @@ async function load() {
 
 els.enabled.addEventListener("change", () => {
   ext.storage.local.set({ interceptEnabled: els.enabled.checked });
+});
+
+// Turning warnings on needs the optional "tabs" permission, and the request
+// MUST run inside this change handler — the browser only honours it from a
+// user gesture. A declined prompt snaps the toggle back off.
+els.flagged.addEventListener("change", async () => {
+  els.flaggedStatus.hidden = true;
+  if (!els.flagged.checked) {
+    await ext.storage.local.set({ flaggedEnabled: false });
+    return;
+  }
+  let granted = false;
+  try {
+    granted = await ext.permissions.request({ permissions: ["tabs"] });
+  } catch (_) {
+    granted = false;
+  }
+  if (!granted) {
+    els.flagged.checked = false;
+    els.flaggedStatus.textContent = "The browser permission was declined, so this stays off.";
+    els.flaggedStatus.hidden = false;
+    return;
+  }
+  await ext.storage.local.set({ flaggedEnabled: true });
+  // Ask the background to fetch the list right away rather than on first use.
+  try {
+    await ext.runtime.sendMessage({ type: "flaggedEnabled" });
+  } catch (_) {
+    /* the worker fetches on next wake anyway */
+  }
 });
 
 els.level.addEventListener("change", () => {

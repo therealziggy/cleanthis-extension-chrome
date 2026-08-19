@@ -28,6 +28,23 @@
     </section>
 
     <section>
+      <h2>Flagged-site warnings</h2>
+      <label class="toggle">
+        <input type="checkbox" id="flagged-enabled">
+        <span>Warn before a known-bad site loads</span>
+      </label>
+      <p class="help">
+        Off by default. While it is on, the extension keeps a local copy of
+        cleanthis.io's flagged-site list and checks the addresses you visit
+        <strong>on your device</strong> — they are never sent to cleanthis.io or anyone
+        else, and no page is ever scanned automatically. A warned site is never blocked:
+        you can always continue. Turning this on asks for the browser's "tabs"
+        permission, which is what lets the extension see the address it checks — locally.
+      </p>
+      <p class="help flagged-status" id="flagged-status" hidden></p>
+    </section>
+
+    <section>
       <h2>Cleaning level</h2>
       <select id="level">
         <option value="light">Light — scan &amp; strip metadata</option>
