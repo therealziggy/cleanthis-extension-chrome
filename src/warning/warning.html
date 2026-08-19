@@ -1,0 +1,39 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CleanThis — Warning</title>
+  <link rel="stylesheet" href="../lib/ui.css">
+  <link rel="stylesheet" href="warning.css">
+</head>
+<body>
+  <main>
+    <div class="card">
+      <div class="badge" aria-hidden="true">⚠</div>
+      <h1>This site is on CleanThis's flagged list</h1>
+
+      <p class="host-line"><span id="host" class="host"></span></p>
+      <p id="reason" class="reason"></p>
+      <p id="seen" class="seen" hidden></p>
+
+      <p class="explain">
+        CleanThis threat intelligence has this site down as harmful. The page has not
+        loaded, and nothing was sent anywhere — this check happened on your device.
+      </p>
+
+      <div class="choices">
+        <button id="back" type="button">Go back</button>
+        <button id="proceed" type="button" class="quiet">Proceed anyway</button>
+      </div>
+      <p class="fineprint">
+        Proceeding loads the site once. You'll be warned again next time.
+      </p>
+    </div>
+  </main>
+
+  <script src="../lib/api.js"></script>
+  <script src="../lib/intercept.js"></script>
+  <script src="../lib/flagged.js"></script>
+  <script src="warning.js"></script>
+</body>
+</html>

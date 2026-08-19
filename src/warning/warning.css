@@ -1,0 +1,90 @@
+/* Flagged-site interstitial. Deliberately navy in BOTH schemes — the page
+   should read as an interruption, not as part of the site behind it. */
+
+body {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 100vh;
+  padding: 24px;
+  background: #1b4d6b;
+}
+
+.card {
+  max-width: 560px;
+  padding: 32px 36px;
+  background: var(--ct-bg);
+  border-radius: 14px;
+  box-shadow: 0 18px 50px rgba(0, 0, 0, 0.35);
+}
+
+.badge {
+  width: 52px;
+  height: 52px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  font-size: 26px;
+  color: #92400e;
+  background: #fef3c7;
+  border-radius: 50%;
+}
+
+h1 {
+  margin: 0 0 12px;
+  font-size: 21px;
+  letter-spacing: -0.01em;
+  color: var(--ct-ink);
+}
+
+.host-line { margin: 0 0 6px; }
+
+.host {
+  font-weight: 700;
+  font-size: 15px;
+  overflow-wrap: anywhere;
+}
+
+.reason {
+  margin: 0 0 4px;
+  color: var(--ct-text);
+}
+
+.seen {
+  margin: 0;
+  color: var(--ct-muted);
+  font-size: 13px;
+}
+
+.explain {
+  margin: 14px 0 20px;
+  color: var(--ct-muted);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.choices {
+  display: flex;
+  gap: 10px;
+}
+
+.choices button { min-width: 130px; }
+
+.choices .quiet {
+  color: var(--ct-muted);
+  background: transparent;
+  border: 1px solid var(--ct-line);
+}
+
+.choices .quiet:hover:not(:disabled) {
+  background: transparent;
+  color: var(--ct-text);
+  border-color: var(--ct-muted);
+}
+
+.fineprint {
+  margin: 12px 0 0;
+  color: var(--ct-muted);
+  font-size: 11px;
+}
