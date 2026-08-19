@@ -18,16 +18,19 @@ machine, and the extension contains no accounts, keys, or secrets of any kind.
 
 Features:
 
-- **Clean a file** — pick a file, get back a sanitized copy (Light / Standard /
-  Aggressive, the same three presets as the website).
-- **Scan this page** — a safety verdict plus security / privacy / legitimacy scores
-  for the tab you're on.
+- **Clean a file** — its own page (drag & drop or browse), get back a sanitized copy
+  (Light / Standard / Aggressive, the same three presets as the website). The
+  cleaning level applies to file cleaning only — never to page scans.
+- **Scan this page** — one click in the popup: a safety verdict plus security /
+  privacy / legitimacy scores for the tab you're on (always a Standard scan).
 - **Download protection** (opt-in, **off by default**) — intercepts risky file
   downloads, has cleanthis.io fetch and sanitize the file server-side, and hands you
   the cleaned copy instead. Every failure path offers a one-click "download the
   original anyway" — the extension never makes a file unreachable. Anything still
   waiting on you shows as a count on the toolbar icon and stays listed in the popup,
-  so a notification you miss costs you nothing.
+  so a notification you miss costs you nothing. Which file types are intercepted is
+  a set of checkboxes in settings, fed by what cleanthis.io currently supports — new
+  types show up there on their own, no update needed.
 
 cleanthis.io allows a set number of scans and files per day per user. The extension
 shows what's left, and pauses instead of retrying when the allowance runs out or the
