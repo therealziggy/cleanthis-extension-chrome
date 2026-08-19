@@ -113,7 +113,10 @@
       return { intercept: false, reason: "bypassed" };
     }
 
-    const exts = settings.interceptExts && settings.interceptExts.length ? settings.interceptExts : DEFAULT_EXTS;
+    // An ARRAY is always the caller's explicit choice — empty means "match
+    // nothing" (the checkbox UI can express that). Only a missing/invalid
+    // value falls back to the defaults.
+    const exts = Array.isArray(settings.interceptExts) ? settings.interceptExts : DEFAULT_EXTS;
     // The browser's filename is the better signal — it survives redirects and
     // download.php-style URLs that carry no suffix of their own.
     const ext = extOf(item.filename) || extOf(item.finalUrl || url);
