@@ -2,9 +2,16 @@
   "manifest_version": 3,
   "name": "CleanThis",
   "version": "0.4.0",
-  "description": "Clean files and scan webpages with cleanthis.io — CDR file sanitization and website safety checks.",
-  "permissions": ["downloads", "storage", "notifications", "activeTab"],
-  "host_permissions": ["https://cleanthis.io/*"],
+  "description": "Clean files and scan webpages with cleanthis.io \u2014 CDR file sanitization and website safety checks.",
+  "permissions": [
+    "downloads",
+    "storage",
+    "notifications",
+    "activeTab"
+  ],
+  "host_permissions": [
+    "https://cleanthis.io/*"
+  ],
   "icons": {
     "16": "icons/icon-16.png",
     "32": "icons/icon-32.png",
@@ -24,5 +31,8 @@
   "options_ui": {
     "page": "options/options.html",
     "open_in_tab": true
-  }
+  },
+  "optional_permissions": [
+    "tabs"
+  ]
 }
