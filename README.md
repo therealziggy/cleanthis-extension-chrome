@@ -31,6 +31,11 @@ Features:
   so a notification you miss costs you nothing. Which file types are intercepted is
   a set of checkboxes in settings, fed by what cleanthis.io currently supports — new
   types show up there on their own, no update needed.
+- **Flagged-site warnings** (opt-in, **off by default**) — a full-page warning before
+  a known-bad site loads, powered by a local copy of CleanThis's flagged-site list.
+  Checks happen entirely **on your device**: the addresses you visit are never sent
+  anywhere, and nothing is scanned automatically. Never a hard block — "Proceed
+  anyway" is always there. Turning it on asks for the browser's "tabs" permission.
 
 cleanthis.io allows a set number of scans and files per day per user. The extension
 shows what's left, and pauses instead of retrying when the allowance runs out or the
