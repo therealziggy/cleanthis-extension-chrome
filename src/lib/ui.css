@@ -19,6 +19,10 @@
   --ct-text: #17303f;
   --ct-error-bg: #fef2f2;
   --ct-error-line: #fecaca;
+  /* Buttons: teal family at ≥4.5:1 against their text in both schemes. */
+  --ct-btn-bg: #2a7e80;
+  --ct-btn-bg-hover: #1f6466;
+  --ct-btn-text: #ffffff;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -35,6 +39,9 @@
     --ct-text: #e6eef3;
     --ct-error-bg: #3f1d1d;
     --ct-error-line: #7f1d1d;
+    --ct-btn-bg: #4db8aa;
+    --ct-btn-bg-hover: #67c6b9;
+    --ct-btn-text: #0d1f1c;
   }
 }
 
@@ -85,14 +92,14 @@ button {
   padding: 9px 12px;
   font: inherit;
   font-weight: 600;
-  color: #fff;
-  background: var(--ct-primary);
+  color: var(--ct-btn-text);
+  background: var(--ct-btn-bg);
   border: 0;
   border-radius: 8px;
   cursor: pointer;
 }
 
-button:hover:not(:disabled) { background: var(--ct-primary-strong); }
+button:hover:not(:disabled) { background: var(--ct-btn-bg-hover); }
 button:disabled { opacity: 0.55; cursor: default; }
 
 select {

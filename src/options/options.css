@@ -1,40 +1,25 @@
-:root {
-  --blue: #2563eb;
-  --line: #e5e7eb;
-  --ink: #111827;
-  --muted: #6b7280;
-}
-
-* { box-sizing: border-box; }
+/* Options page layout. Shared look lives in ../lib/ui.css. */
 
 body {
-  margin: 0;
   padding: 28px 20px;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 14px;
   line-height: 1.5;
-  color: var(--ink);
-  background: #fff;
 }
 
 main {
-  max-width: 620px;
+  max-width: 640px;
   margin: 0 auto;
-}
-
-h1 {
-  margin: 0 0 20px;
-  font-size: 22px;
 }
 
 h2 {
   margin: 0 0 8px;
   font-size: 15px;
+  color: var(--ct-ink);
 }
 
 section {
   padding: 16px 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--ct-line);
 }
 
 .toggle {
@@ -46,20 +31,11 @@ section {
 
 .help {
   margin: 8px 0 0;
-  color: var(--muted);
+  color: var(--ct-muted);
   font-size: 13px;
 }
 
-select {
-  width: 100%;
-  max-width: 420px;
-  padding: 7px;
-  font: inherit;
-  color: inherit;
-  background: #fff;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-}
+select { max-width: 420px; }
 
 .type-groups {
   display: grid;
@@ -69,7 +45,7 @@ select {
 .type-group {
   margin: 0;
   padding: 8px 10px 10px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--ct-line);
   border-radius: 8px;
 }
 
@@ -77,7 +53,7 @@ select {
   padding: 0 4px;
   font-size: 12px;
   font-weight: 600;
-  color: var(--muted);
+  color: var(--ct-muted);
 }
 
 .type-choice {
@@ -89,26 +65,32 @@ select {
   cursor: pointer;
 }
 
+.type-choice input { accent-color: var(--ct-primary); }
+
+.toggle input { accent-color: var(--ct-primary); }
+
 .link {
   padding: 0;
   font: inherit;
-  color: var(--blue);
+  color: var(--ct-primary-strong);
   background: none;
   border: 0;
   cursor: pointer;
   text-decoration: underline;
 }
 
-.quota { margin: 0; font-variant-numeric: tabular-nums; }
+.link:hover:not(:disabled) { background: none; color: var(--ct-primary); }
+
+.quota {
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  color: var(--ct-text);
+  font-size: 14px;
+  text-align: left;
+}
 
 .version {
   margin-top: 24px;
-  color: var(--muted);
+  color: var(--ct-muted);
   font-size: 12px;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root { --line: #374151; --ink: #f3f4f6; --muted: #9ca3af; }
-  body { background: #1f2937; }
-  select { background: #111827; }
 }
