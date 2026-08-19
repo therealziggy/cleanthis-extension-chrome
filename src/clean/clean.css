@@ -54,6 +54,46 @@ main {
   color: var(--ct-muted);
 }
 
+.report {
+  margin: 10px 0 12px;
+  padding-top: 10px;
+  border-top: 1px solid var(--ct-line);
+}
+
+.report-title {
+  margin: 0 0 6px;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: var(--ct-muted);
+}
+
+.report-strength {
+  margin: 0 0 6px;
+  font-weight: 600;
+  color: var(--ct-ink);
+}
+
+.report-list {
+  margin: 0;
+  padding-left: 18px;
+}
+
+.report-list li {
+  margin: 2px 0;
+  font-size: 13px;
+}
+
+.report-list li.danger { color: var(--ct-red); font-weight: 600; }
+
+.report-more,
+.report-summary {
+  margin: 6px 0 0;
+  color: var(--ct-muted);
+  font-size: 12px;
+}
+
 .field {
   display: block;
   max-width: 420px;
