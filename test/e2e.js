@@ -119,6 +119,49 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     record("clean a file", false, err.message);
   }
 
+  // ── 2b. clean via the page (the path the popup bug killed) ──
+  // The v1 popup died when the file dialog took focus; the flow now lives in
+  // a real tab. Playwright can't open a native dialog, but setInputFiles
+  // exercises everything after it: the page-context upload, the job watch,
+  // and the save-fresh-URL dance.
+  try {
+    sw = await worker(context);
+    const extensionId = new URL(sw.url()).host;
+    const cleanPage = await context.newPage();
+    await cleanPage.goto(`chrome-extension://${extensionId}/clean/clean.html`, { waitUntil: "load" });
+    await cleanPage.setInputFiles("#file-input", {
+      name: "e2e-page.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("hello from the clean page e2e\n"),
+    });
+    await cleanPage.waitForSelector("#clean-result button", { timeout: 120000 });
+    const readyText = await cleanPage.textContent("#clean-result");
+    await cleanPage.click("#clean-result button");
+
+    // The page must own up to the outcome: "Saved." — not a port error.
+    await cleanPage.waitForFunction(
+      () => /Saved\./.test(document.querySelector("#clean-result .driver")?.textContent || ""),
+      { timeout: 30000 }
+    );
+
+    // Playwright redirects downloads to artifact paths with opaque names, so
+    // match on the signed download URL, not the filename. This is the first
+    // /api/download of the run (the interception phases come later).
+    const saved = await pollWorker(
+      context,
+      async (apiBase) => {
+        const items = await chrome.downloads.search({});
+        const done = items.find((d) => d.url.startsWith(`${apiBase}/api/download`) && d.state === "complete");
+        return { done: !!done, url: done ? done.url.slice(0, 60) : null };
+      },
+      { timeoutMs: 60000, arg: BASE }
+    );
+    record("clean via the page and save", !saved.timeout && /is ready/.test(readyText || ""), saved.url || readyText);
+    await cleanPage.close();
+  } catch (err) {
+    record("clean via the page and save", false, err.message);
+  }
+
   // ── 3. intercepted download ─────────────────────────────────
   sw = await worker(context);
   await sw.evaluate(() => chrome.storage.local.set({ interceptEnabled: true, level: "standard" }));
