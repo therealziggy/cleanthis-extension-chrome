@@ -98,8 +98,27 @@ async function startClean(file) {
   show(els.cleanResult, { html: text("span", "progress", `Uploading ${file.name}…`) });
 
   // Hand the job to the background script if this page closes mid-flight.
+  // The port deliberately stays OPEN while an unsaved result is on screen:
+  // disconnecting is what tells the background to take the job over, so doing
+  // it early would double-offer a file the page is already showing. (v1's
+  // popup had exactly that bug — plus a dead-port error on a late Save click.)
   const port = ext.runtime.connect({ name: "job-watch" });
   let handedOver = false;
+
+  // Mark the job dealt-with and close the port. A dead port means the worker
+  // restarted and its recovery path owns the job now — never an error here.
+  function settle() {
+    try {
+      port.postMessage({ done: true });
+    } catch (_) {
+      /* recovery owns it */
+    }
+    try {
+      port.disconnect();
+    } catch (_) {
+      /* already gone */
+    }
+  }
 
   try {
     const job = await api.sanitizeFile(file, els.level.value);
@@ -130,9 +149,9 @@ async function startClean(file) {
           if (!url) throw new api.ApiError("Cleaned files are only kept for a few minutes. Clean it again for a fresh copy.");
           await ext.downloads.download({ url, filename: fresh.downloadName || undefined });
           // Only now is the file genuinely the user's; until this point the
-          // background worker stays on the job in case the page disappears.
-          port.postMessage({ done: true });
+          // port stays open so a closed page hands the job to the background.
           note.textContent = "Saved.";
+          settle();
         } catch (err) {
           // Leave the button usable — the job is valid for a few more minutes
           // and a second click often just works.
@@ -144,12 +163,12 @@ async function startClean(file) {
       wrap.append(note);
       show(els.cleanResult, { html: wrap });
     } else if (finished.state === "cancelled") {
-      port.postMessage({ done: true });
+      settle();
       show(els.cleanResult, { html: text("span", null, "That job was cancelled."), error: true });
     } else {
       // The failure is on screen already; no need for the background worker to
       // repeat it as a notification.
-      port.postMessage({ done: true });
+      settle();
       show(els.cleanResult, {
         html: text("span", null, finished.error || "Cleaning failed. Please try again."),
         error: true,
@@ -157,23 +176,28 @@ async function startClean(file) {
     }
   } catch (err) {
     if (handedOver) {
-      // The background script is still watching; say so rather than implying
-      // the job died.
+      // Disconnecting WITHOUT done hands the job to the background watcher;
+      // say so rather than implying the job died.
       show(els.cleanResult, {
         html: text("span", null, `${humanize(err)} You'll get a notification if it finishes.`),
         error: true,
       });
+      try {
+        port.disconnect();
+      } catch (_) {
+        /* already gone */
+      }
     } else {
       show(els.cleanResult, { html: text("span", null, humanize(err)), error: true });
+      try {
+        port.disconnect();
+      } catch (_) {
+        /* nothing registered — closing is just tidy */
+      }
     }
   } finally {
     busy(false);
     refreshQuota();
-    try {
-      port.disconnect();
-    } catch (_) {
-      /* already gone */
-    }
   }
 }
 
