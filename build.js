@@ -81,6 +81,10 @@ if (process.argv.includes("--dev")) {
     fs.readFileSync(path.join(ROOT, "manifest", "dev.json"), "utf8")
   );
   const manifest = deepMerge(deepMerge(base, chromeFragment), devFragment);
+  // The shipped build asks for "tabs" at runtime (optional_permissions), but a
+  // permission prompt can't be clicked from the E2E harness — so the dev build
+  // grants it at install. Dev-only; the release manifests are untouched.
+  if (!manifest.permissions.includes("tabs")) manifest.permissions.push("tabs");
   const outDir = path.join(ROOT, "dist", "chrome-dev");
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });

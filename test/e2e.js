@@ -314,6 +314,72 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     record("download the original anyway", false, err.message);
   }
 
+  // ── 5. flagged-site warning: warn → proceed once → warn again ──
+  // The harness maps e2e-flagged.example to 127.0.0.1 (a public-looking name;
+  // local addresses are skipped by design), and seeds the stored list directly
+  // — hash parity with the live endpoint is pinned by unit tests on both
+  // sides, so the E2E's job is the tab flow itself. The dev build carries the
+  // "tabs" permission at install because the runtime prompt can't be clicked
+  // from a harness.
+  try {
+    sw = await worker(context);
+    await sw.evaluate(async () => {
+      const hash = await self.CleanThisFlagged.hashHost("e2e-flagged.example");
+      await chrome.storage.local.set({
+        flaggedEnabled: true,
+        flaggedList: {
+          version: 1,
+          etag: null,
+          fetchedAt: Date.now(),
+          entries: [[hash, "phishing", "2026-07"]],
+        },
+      });
+    });
+
+    const page5 = await context.newPage();
+    await page5.goto(`http://e2e-flagged.example:${FILE_PORT}/`, { waitUntil: "commit" }).catch(() => {});
+    await page5.waitForURL(/warning\/warning\.html/, { timeout: 15000 });
+    const shownHost = await page5.textContent("#host");
+    record("a flagged page is interrupted by the warning", /e2e-flagged\.example/.test(shownHost || ""), shownHost);
+
+    await page5.click("#proceed");
+    await page5.waitForURL(`http://e2e-flagged.example:${FILE_PORT}/`, { timeout: 15000 });
+    const bodyText = await page5.textContent("body");
+    record("proceed anyway loads the site once", /get/.test(bodyText || ""));
+
+    // A same-URL reload doesn't change the tab's URL, so revisit a different
+    // path on the flagged host — tabs.onUpdated only carries url on change.
+    await page5.goto(`http://e2e-flagged.example:${FILE_PORT}/again`, { waitUntil: "commit" }).catch(() => {});
+    await page5.waitForURL(/warning\/warning\.html/, { timeout: 15000 });
+    record("the bypass is one-shot: the next visit warns again", true);
+
+    // Go back returns to where the user was. (Playwright tabs always open on
+    // about:blank, which counts as history — so the history.back() branch is
+    // what runs here; the no-history branch is exercised just below.)
+    const page5b = await context.newPage();
+    await page5b.goto(`http://e2e-flagged.example:${FILE_PORT}/`, { waitUntil: "commit" }).catch(() => {});
+    await page5b.waitForURL(/warning\/warning\.html/, { timeout: 15000 });
+    await page5b.click("#back");
+    await page5b.waitForURL("about:blank", { timeout: 10000 });
+    record("go back returns to the previous page", true);
+
+    // The no-history fallback asks the background to close the tab; drive the
+    // message directly, the same call warning.js makes.
+    const closed = new Promise((resolve) => page5b.once("close", () => resolve(true)));
+    await page5b.goto(`http://e2e-flagged.example:${FILE_PORT}/close-me`, { waitUntil: "commit" }).catch(() => {});
+    await page5b.waitForURL(/warning\/warning\.html/, { timeout: 15000 });
+    // Fire-and-forget: the tab closing kills the evaluate round-trip, so an
+    // awaited call would throw "Target closed" precisely when it works.
+    page5b.evaluate(() => (typeof browser !== "undefined" ? browser : chrome).runtime.sendMessage({ type: "closeMe" })).catch(() => {});
+    record("closeMe closes the warning tab", await Promise.race([closed, new Promise((r) => setTimeout(() => r(false), 10000))]));
+
+    await page5.close().catch(() => {});
+    sw = await worker(context);
+    await sw.evaluate(() => chrome.storage.local.remove(["flaggedEnabled", "flaggedList"]));
+  } catch (err) {
+    record("flagged-site warning flow", false, err.message);
+  }
+
   await cleanup();
   fileServer.close();
 
