@@ -25,6 +25,21 @@ The extension also periodically fetches its **file-type catalogue** from cleanth
 the list of types the settings page can offer. That request is a plain configuration
 download and carries nothing about you: no addresses, no files, no identifiers.
 
+## Flagged-site warnings (optional, off by default)
+
+When you turn this on, the extension downloads CleanThis's list of known-bad sites as
+irreversible fingerprints and checks the sites you visit **on your device**. The
+addresses you visit are never sent to cleanthis.io or anyone else, and no page is ever
+scanned automatically. The list download itself is the same kind of plain configuration
+request as above — it carries nothing about you.
+
+Turning the feature on asks for the browser's "tabs" permission. That permission is
+what lets the extension see the address of the page being checked — locally. Turning
+the feature off stops all checking; you can also revoke the permission from your
+browser's extension settings at any time.
+
+A warning never blocks a site outright: "Proceed anyway" always loads it.
+
 ## What is never sent
 
 - Your browsing history. The extension does not watch pages you visit, and has no
