@@ -148,6 +148,16 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     });
     await cleanPage.waitForSelector("#clean-result button", { timeout: 120000 });
     const readyText = await cleanPage.textContent("#clean-result");
+
+    // The completed response carries the sanitization report; the page must
+    // show it (v0.5.3) — title plus at least one concrete change bullet.
+    const reportItems = await cleanPage.locator("#clean-result .report-list li").count();
+    record(
+      "the result shows what was done",
+      /What was done/.test(readyText || "") && reportItems > 0,
+      `${reportItems} change entr${reportItems === 1 ? "y" : "ies"}`
+    );
+
     await cleanPage.click("#clean-result button");
 
     // The page must own up to the outcome: "Saved." — not a port error.

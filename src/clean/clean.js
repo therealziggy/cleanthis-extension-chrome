@@ -84,6 +84,39 @@ els.settings.addEventListener("click", (event) => {
   ext.runtime.openOptionsPage();
 });
 
+// ── the sanitization report ───────────────────────────────────
+// The server's completed-job response has always carried the same report the
+// website shows (what was stripped, what the pre-scan found, how strong the
+// clean was); until v0.5.3 the extension ignored it. Rendered compactly:
+// the cleaning-strength line first, then up to MAX_REPORT_ITEMS changes.
+
+const MAX_REPORT_ITEMS = 8;
+
+function renderReport(report) {
+  if (!report || !Array.isArray(report.changes) || !report.changes.length) return null;
+
+  const box = text("div", "report");
+  box.append(text("h2", "report-title", "What was done"));
+
+  // The strength descriptor leads — it says how deep the clean could go.
+  const strength = report.changes.find((c) => c && c.type === "cleaning_strength");
+  if (strength && strength.label) box.append(text("p", "report-strength", strength.label));
+
+  const rest = report.changes.filter((c) => c && c !== strength && c.label);
+  const list = text("ul", "report-list");
+  for (const change of rest.slice(0, MAX_REPORT_ITEMS)) {
+    const row = text("li", change.danger ? "danger" : null, change.label);
+    list.append(row);
+  }
+  if (list.childElementCount) box.append(list);
+  if (rest.length > MAX_REPORT_ITEMS) {
+    box.append(text("p", "report-more", `…and ${rest.length - MAX_REPORT_ITEMS} more`));
+  }
+  if (report.summary) box.append(text("p", "report-summary", report.summary));
+
+  return box.childElementCount > 1 ? box : null;
+}
+
 // ── clean flow (moved verbatim from the v1 popup) ─────────────
 
 async function startClean(file) {
@@ -135,6 +168,8 @@ async function startClean(file) {
     if (finished.state === "completed") {
       const wrap = document.createDocumentFragment();
       wrap.append(text("p", null, `${finished.downloadName || file.name} is ready.`));
+      const report = renderReport(finished.report);
+      if (report) wrap.append(report);
       const save = document.createElement("button");
       save.textContent = "Save cleaned file";
       const note = text("p", "driver");
