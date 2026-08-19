@@ -51,13 +51,18 @@ if (/^\d{4}-\d{2}$/.test(seen)) {
 }
 
 document.getElementById("back").addEventListener("click", () => {
-  if (history.length > 1) {
-    history.back();
-  } else {
-    // A tab with no history (opened straight onto the flagged site) has
-    // nowhere to go back to — ask the background to close it.
+  // The entry immediately behind this page is the flagged page itself (the
+  // redirect added the warning on top of it) — going back one would land
+  // there and be re-warned into a loop. Skip past it. If there's nothing two
+  // steps back, go() does nothing: this page is then still here after the
+  // grace period, and the right move is to close the tab.
+  history.go(-2);
+  const fallback = setTimeout(() => {
     ext.runtime.sendMessage({ type: "closeMe" }).catch(() => {});
-  }
+  }, 1500);
+  // A successful back-navigation hides this document; only a no-op go()
+  // leaves it standing, and then closing the tab is the honest "back".
+  addEventListener("pagehide", () => clearTimeout(fallback), { once: true });
 });
 
 const proceed = document.getElementById("proceed");

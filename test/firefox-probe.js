@@ -56,6 +56,29 @@
 
   await attempt("storage.session", () => (browser.storage.session ? "present" : "MISSING (falls back to local)"));
 
+  // v0.5 flagged-site warnings: the optional "tabs" permission surface.
+  // permissions.request() needs a real user gesture, so the GRANT flow is a
+  // manual dogfood item — what a headless probe CAN pin down is that the
+  // manifest parses with optional_permissions, contains() answers cleanly
+  // pre-grant, and the tabs.onUpdated listener API is callable without it.
+  await attempt("optional tabs permission: contains() pre-grant", async () => {
+    const held = await browser.permissions.contains({ permissions: ["tabs"] });
+    return held ? "ALREADY GRANTED (unexpected pre-grant)" : "not granted (expected pre-grant)";
+  });
+  await attempt("tabs.onUpdated add/removeListener callable without the permission", () => {
+    const probe = () => {};
+    browser.tabs.onUpdated.addListener(probe);
+    const had = browser.tabs.onUpdated.hasListener(probe);
+    browser.tabs.onUpdated.removeListener(probe);
+    return had ? "callable" : "hasListener returned false";
+  });
+  await attempt("lib/flagged.js loaded", () => (self.CleanThisFlagged ? "yes" : "NO"));
+  await attempt("flagged hash parity vector", async () => {
+    // sha256("evil-fixture.example") first 8 bytes — must equal the server's.
+    const hex = await self.CleanThisFlagged.hashHost("evil-fixture.example");
+    return hex === "e00110291c85d003" ? `matches (${hex})` : `MISMATCH: ${hex}`;
+  });
+
   // Notifications: which options does Firefox accept? Our recovery flow hangs
   // off this, so the exact constraint set matters.
   await attempt("notification, plain", async () => {
