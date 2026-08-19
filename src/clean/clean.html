@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>CleanThis — Clean a file</title>
+  <link rel="stylesheet" href="../lib/ui.css">
+  <link rel="stylesheet" href="clean.css">
+</head>
+<body>
+  <main>
+    <header class="ct-header">
+      <img src="../icons/icon-32.png" alt="" width="20" height="20">
+      <h1>CleanThis <span class="ct-surface">· Clean a file</span></h1>
+      <a id="settings-link" href="#" title="Settings">Settings</a>
+    </header>
+
+    <p class="intro">
+      The file is uploaded to cleanthis.io, rebuilt without anything dangerous,
+      and handed back. Files over 50&nbsp;MB are rejected before upload.
+    </p>
+
+    <div id="drop" class="drop" tabindex="0" role="button"
+         aria-label="Drop a file here or click to browse">
+      <span class="drop-title">Drop a file here</span>
+      <span class="drop-sub">or click to browse</span>
+    </div>
+    <input type="file" id="file-input" hidden>
+
+    <label class="field">
+      <span>Cleaning level</span>
+      <select id="level">
+        <option value="light">Light — scan &amp; strip metadata</option>
+        <option value="standard" selected>Standard — full clean</option>
+        <option value="aggressive">Aggressive — convert to safest form</option>
+      </select>
+    </label>
+
+    <div id="clean-result" class="result" hidden></div>
+
+    <p id="quota" class="quota"></p>
+  </main>
+
+  <script src="../lib/api.js"></script>
+  <script src="clean.js"></script>
+</body>
+</html>

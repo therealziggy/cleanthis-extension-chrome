@@ -1,66 +1,9 @@
-:root {
-  --blue: #2563eb;
-  --green: #16a34a;
-  --amber: #d97706;
-  --red: #dc2626;
-  --gray: #6b7280;
-  --line: #e5e7eb;
-  --ink: #111827;
-  --muted: #6b7280;
-}
-
-* { box-sizing: border-box; }
+/* Popup layout. Shared look lives in ../lib/ui.css. */
 
 body {
   width: 320px;
-  margin: 0;
   padding: 14px;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
   font-size: 13px;
-  color: var(--ink);
-  background: #fff;
-}
-
-header {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
-  margin-bottom: 12px;
-}
-
-h1 {
-  margin: 0;
-  font-size: 17px;
-  letter-spacing: -0.01em;
-}
-
-header a {
-  color: var(--muted);
-  font-size: 12px;
-  text-decoration: none;
-}
-
-header a:hover { text-decoration: underline; }
-
-.field {
-  display: block;
-  margin-bottom: 12px;
-}
-
-.field span {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-select {
-  width: 100%;
-  padding: 6px;
-  font: inherit;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  background: #fff;
 }
 
 .actions {
@@ -69,45 +12,29 @@ select {
   gap: 8px;
 }
 
-button {
-  padding: 9px 10px;
-  font: inherit;
-  font-weight: 600;
-  color: #fff;
-  background: var(--blue);
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
+.actions button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
 }
 
-button:hover:not(:disabled) { background: #1d4ed8; }
-button:disabled { opacity: 0.55; cursor: default; }
-
-.result {
-  margin-top: 12px;
-  padding: 10px;
-  border: 1px solid var(--line);
-  border-radius: 6px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
+.actions .btn-sub {
+  font-size: 10px;
+  font-weight: 500;
+  opacity: 0.8;
 }
 
-.result.error { border-color: #fecaca; background: #fef2f2; }
-
-.verdict {
-  display: inline-block;
-  margin-bottom: 8px;
-  padding: 3px 9px;
-  color: #fff;
-  font-weight: 700;
-  font-size: 12px;
-  border-radius: 999px;
+.actions .secondary {
+  color: var(--ct-ink);
+  background: var(--ct-card);
+  border: 1px solid var(--ct-line);
 }
 
-.verdict-clean { background: var(--green); }
-.verdict-suspicious { background: var(--amber); }
-.verdict-malicious { background: var(--red); }
-.verdict-unreachable { background: var(--gray); }
+.actions .secondary:hover:not(:disabled) {
+  background: var(--ct-accent-tint);
+  border-color: var(--ct-primary);
+}
 
 .scores { margin: 0; padding: 0; list-style: none; }
 
@@ -117,37 +44,27 @@ button:disabled { opacity: 0.55; cursor: default; }
   justify-content: space-between;
   gap: 8px;
   padding: 3px 0;
-  border-top: 1px solid var(--line);
+  border-top: 1px solid var(--ct-line);
 }
 
 .scores li:first-child { border-top: 0; }
 
-.score-name { color: var(--muted); }
+.score-name { color: var(--ct-muted); }
 
 .score-value { font-weight: 700; font-variant-numeric: tabular-nums; }
-.band-green { color: var(--green); }
-.band-amber { color: var(--amber); }
-.band-red { color: var(--red); }
-.band-none { color: var(--gray); }
-
-.driver {
-  margin: 6px 0 0;
-  color: var(--muted);
-  font-size: 12px;
-}
-
-.result a { color: var(--blue); }
-
-.progress { color: var(--muted); }
+.band-green { color: var(--ct-green); }
+.band-amber { color: var(--ct-amber); }
+.band-red { color: var(--ct-red); }
+.band-none { color: var(--ct-gray); }
 
 /* Things still waiting on a decision — deliberately at the top, and styled to
    read as unfinished business rather than a status line. */
 .pending {
   margin-bottom: 12px;
   padding: 10px;
-  border: 1px solid #fbbf24;
-  border-radius: 6px;
-  background: #fffbeb;
+  border: 1px solid var(--ct-amber);
+  border-radius: 8px;
+  background: var(--ct-card);
 }
 
 .pending h2 {
@@ -155,7 +72,7 @@ button:disabled { opacity: 0.55; cursor: default; }
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.04em;
-  color: #92400e;
+  color: var(--ct-amber);
 }
 
 .pending ul {
@@ -173,7 +90,7 @@ button:disabled { opacity: 0.55; cursor: default; }
 .pending li + li {
   margin-top: 10px;
   padding-top: 10px;
-  border-top: 1px solid #fde68a;
+  border-top: 1px solid var(--ct-line);
 }
 
 .pending-name {
@@ -183,25 +100,10 @@ button:disabled { opacity: 0.55; cursor: default; }
 
 .pending-why {
   font-size: 12px;
-  color: #6b7280;
+  color: var(--ct-muted);
 }
 
 .pending button.danger {
-  background: #b91c1c;
-  border-color: #b91c1c;
+  background: var(--ct-red);
   color: #fff;
-}
-
-.quota {
-  margin: 12px 0 0;
-  color: var(--muted);
-  font-size: 11px;
-  text-align: center;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root { --line: #374151; --ink: #f3f4f6; --muted: #9ca3af; }
-  body { background: #1f2937; color: var(--ink); }
-  select { background: #111827; color: var(--ink); }
-  .result.error { background: #3f1d1d; border-color: #7f1d1d; }
 }
