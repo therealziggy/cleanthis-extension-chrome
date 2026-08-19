@@ -125,5 +125,5 @@
     return { intercept: true, reason: "matched", ext };
   }
 
-  self.CleanThisIntercept = { decide, extOf, DEFAULT_EXTS };
+  self.CleanThisIntercept = { decide, extOf, DEFAULT_EXTS, isLocalAddress };
 })();
