@@ -13,22 +13,35 @@
 // Chrome loads the shared libraries into the worker here; Firefox lists them
 // in the manifest instead (event pages have no importScripts).
 if (typeof importScripts === "function") {
-  importScripts("lib/api.js", "lib/intercept.js");
+  importScripts("lib/api.js", "lib/intercept.js", "lib/filetypes.js");
 }
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 const api = self.CleanThisApi;
 const intercept = self.CleanThisIntercept;
+const fileTypes = self.CleanThisFileTypes;
 
 const DEFAULT_SETTINGS = {
   interceptEnabled: false,
   level: "standard",
-  interceptExts: intercept.DEFAULT_EXTS,
 };
 
 async function getSettings() {
-  const stored = await ext.storage.local.get(Object.keys(DEFAULT_SETTINGS));
-  return { ...DEFAULT_SETTINGS, ...stored };
+  const stored = await ext.storage.local.get([
+    ...Object.keys(DEFAULT_SETTINGS),
+    "interceptExts",
+    fileTypes.CACHE_KEY,
+  ]);
+  const catalogue = stored[fileTypes.CACHE_KEY] && stored[fileTypes.CACHE_KEY].payload;
+  return {
+    ...DEFAULT_SETTINGS,
+    ...stored,
+    // Missing key = follow the recommended set (from the cached catalogue if
+    // present, else the baked snapshot); a stored array is the user's choice.
+    // The worker never fetches the catalogue — the options page owns refresh,
+    // so interception stays fast and offline-safe.
+    interceptExts: fileTypes.effectiveExts(stored.interceptExts, catalogue),
+  };
 }
 
 // ── pending notification actions ──────────────────────────────

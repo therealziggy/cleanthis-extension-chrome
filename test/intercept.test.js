@@ -128,8 +128,14 @@ test("a download with no recognisable extension is left alone", () => {
   assert.equal(decide({ url: "https://example.com/stream" }, ON, NONE, BASE).reason, "ext-not-matched");
 });
 
-test("an empty extension list falls back to the defaults", () => {
+test("an explicit empty extension list matches nothing", () => {
+  // Empty is a choice the checkbox UI can express: every box unticked.
   const settings = { interceptEnabled: true, interceptExts: [] };
+  assert.equal(decide({ url: "https://example.com/a.pdf" }, settings, NONE, BASE).intercept, false);
+});
+
+test("a missing extension list falls back to the defaults", () => {
+  const settings = { interceptEnabled: true };
   assert.equal(decide({ url: "https://example.com/a.pdf" }, settings, NONE, BASE).intercept, true);
   assert.ok(DEFAULT_EXTS.includes("pdf"));
 });

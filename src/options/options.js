@@ -1,30 +1,26 @@
 // CleanThis — options page.
 // Settings are stored in extension storage and read by the popup and the
 // background script; every change saves immediately.
+//
+// The file-type checkboxes render from the server's catalogue (cached by
+// lib/filetypes.js). Semantics: while the user has never customised, the
+// recommended set applies LIVE (no interceptExts key in storage); the first
+// checkbox change freezes an explicit list. "Restore recommended" deletes the
+// key, returning to live-follow.
 
 "use strict";
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
-const { DEFAULT_EXTS } = self.CleanThisIntercept;
+const fileTypes = self.CleanThisFileTypes;
 
 const els = {
   enabled: document.getElementById("intercept-enabled"),
   level: document.getElementById("level"),
-  exts: document.getElementById("intercept-exts"),
+  groups: document.getElementById("type-groups"),
   restore: document.getElementById("restore-exts"),
   quota: document.getElementById("quota"),
   version: document.getElementById("version"),
 };
-
-// "PDF, .docx , docx" → ["pdf", "docx"]
-function parseExts(raw) {
-  const seen = new Set();
-  for (const piece of String(raw).split(",")) {
-    const ext = piece.trim().toLowerCase().replace(/^\.+/, "");
-    if (ext) seen.add(ext);
-  }
-  return [...seen];
-}
 
 function describeQuota(label, quota) {
   if (!quota) return null;
@@ -32,6 +28,58 @@ function describeQuota(label, quota) {
   const reset = quota.resetEpoch ? new Date(quota.resetEpoch * 1000).toLocaleString() : null;
   return `${label}: ${used} of ${quota.limit} used today${reset ? ` · resets ${reset}` : ""}`;
 }
+
+// ── file-type checkbox groups ─────────────────────────────────
+
+let catalogue = fileTypes.BAKED;
+
+function checkedExts() {
+  return [...els.groups.querySelectorAll("input[type=checkbox]:checked")].map((box) => box.dataset.ext);
+}
+
+function renderGroups(payload, effective) {
+  const chosen = new Set(effective);
+  els.groups.textContent = "";
+
+  for (const group of payload.groups) {
+    const fieldset = document.createElement("fieldset");
+    fieldset.className = "type-group";
+
+    const legend = document.createElement("legend");
+    legend.textContent = group.label;
+    fieldset.append(legend);
+
+    for (const extName of group.exts) {
+      const label = document.createElement("label");
+      label.className = "type-choice";
+
+      const box = document.createElement("input");
+      box.type = "checkbox";
+      box.dataset.ext = extName;
+      box.checked = chosen.has(extName);
+      box.addEventListener("change", () => {
+        // The first touch freezes the choice as an explicit list.
+        ext.storage.local.set({ interceptExts: checkedExts() });
+      });
+
+      const name = document.createElement("span");
+      name.textContent = `.${extName}`;
+
+      label.append(box, name);
+      fieldset.append(label);
+    }
+
+    els.groups.append(fieldset);
+  }
+}
+
+els.restore.addEventListener("click", async () => {
+  // Deleting the key returns the user to "follow the recommended set, live".
+  await ext.storage.local.remove("interceptExts");
+  renderGroups(catalogue, fileTypes.recommendedUnion(catalogue));
+});
+
+// ── load ──────────────────────────────────────────────────────
 
 async function load() {
   const stored = await ext.storage.local.get([
@@ -44,7 +92,9 @@ async function load() {
 
   els.enabled.checked = stored.interceptEnabled === true;
   els.level.value = stored.level || "standard";
-  els.exts.value = (stored.interceptExts && stored.interceptExts.length ? stored.interceptExts : DEFAULT_EXTS).join(", ");
+
+  ({ payload: catalogue } = await fileTypes.getConfig(ext));
+  renderGroups(catalogue, fileTypes.effectiveExts(stored.interceptExts, catalogue));
 
   const lines = [
     describeQuota("Webpage scans", stored.quota_scan),
@@ -62,19 +112,6 @@ els.enabled.addEventListener("change", () => {
 
 els.level.addEventListener("change", () => {
   ext.storage.local.set({ level: els.level.value });
-});
-
-// Normalise on the way out of the field so what's stored matches what's shown.
-els.exts.addEventListener("change", () => {
-  const exts = parseExts(els.exts.value);
-  const effective = exts.length ? exts : DEFAULT_EXTS;
-  els.exts.value = effective.join(", ");
-  ext.storage.local.set({ interceptExts: effective });
-});
-
-els.restore.addEventListener("click", () => {
-  els.exts.value = DEFAULT_EXTS.join(", ");
-  ext.storage.local.set({ interceptExts: DEFAULT_EXTS });
 });
 
 load();

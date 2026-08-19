@@ -1,6 +1,6 @@
 {
   "background": {
-    "scripts": ["lib/api.js", "lib/intercept.js", "background.js"]
+    "scripts": ["lib/api.js", "lib/intercept.js", "lib/filetypes.js", "background.js"]
   },
   "browser_specific_settings": {
     "gecko": {

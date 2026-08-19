@@ -50,8 +50,7 @@ section {
   font-size: 13px;
 }
 
-select,
-textarea {
+select {
   width: 100%;
   max-width: 420px;
   padding: 7px;
@@ -62,7 +61,33 @@ textarea {
   border-radius: 6px;
 }
 
-textarea { resize: vertical; }
+.type-groups {
+  display: grid;
+  gap: 10px;
+}
+
+.type-group {
+  margin: 0;
+  padding: 8px 10px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+
+.type-group legend {
+  padding: 0 4px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--muted);
+}
+
+.type-choice {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  margin: 2px 12px 2px 0;
+  font-variant-numeric: tabular-nums;
+  cursor: pointer;
+}
 
 .link {
   padding: 0;
@@ -85,5 +110,5 @@ textarea { resize: vertical; }
 @media (prefers-color-scheme: dark) {
   :root { --line: #374151; --ink: #f3f4f6; --muted: #9ca3af; }
   body { background: #1f2937; }
-  select, textarea { background: #111827; }
+  select { background: #111827; }
 }

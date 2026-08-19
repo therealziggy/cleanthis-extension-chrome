@@ -30,15 +30,16 @@
         <option value="standard">Standard — full clean</option>
         <option value="aggressive">Aggressive — convert to safest form</option>
       </select>
-      <p class="help">Used for files you clean from the popup and for automatic downloads.</p>
+      <p class="help">Used when cleaning files and for automatic download cleaning. Webpage scans are not affected.</p>
     </section>
 
     <section>
       <h2>File types to clean automatically</h2>
-      <textarea id="intercept-exts" rows="3" spellcheck="false"></textarea>
+      <div id="type-groups" class="type-groups" aria-live="polite"></div>
       <p class="help">
-        Comma-separated. Only these download types are intercepted.
-        <button type="button" id="restore-exts" class="link">Restore defaults</button>
+        Only ticked download types are intercepted. The list comes from what
+        cleanthis.io supports, so new types appear here on their own.
+        <button type="button" id="restore-exts" class="link">Restore recommended</button>
       </p>
     </section>
 
@@ -56,6 +57,7 @@
 
   <script src="../lib/api.js"></script>
   <script src="../lib/intercept.js"></script>
+  <script src="../lib/filetypes.js"></script>
   <script src="options.js"></script>
 </body>
 </html>
