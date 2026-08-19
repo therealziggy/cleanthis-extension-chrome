@@ -51,12 +51,14 @@ if (/^\d{4}-\d{2}$/.test(seen)) {
 }
 
 document.getElementById("back").addEventListener("click", () => {
-  // The entry immediately behind this page is the flagged page itself (the
-  // redirect added the warning on top of it) — going back one would land
-  // there and be re-warned into a loop. Skip past it. If there's nothing two
-  // steps back, go() does nothing: this page is then still here after the
-  // grace period, and the right move is to close the tab.
-  history.go(-2);
+  // How far back is "back" depends on how we got here (the background says,
+  // via the `via` param): a commit-time warn sits ON TOP of the flagged
+  // entry — going back one would land there and re-warn in a loop, so skip
+  // two. A pre-navigation warn replaced a navigation that never committed,
+  // so one step is exactly right. If there's nothing that far back, go()
+  // does nothing: this page is then still here after the grace period, and
+  // the right move is to close the tab.
+  history.go(params.get("via") === "commit" ? -2 : -1);
   const fallback = setTimeout(() => {
     ext.runtime.sendMessage({ type: "closeMe" }).catch(() => {});
   }, 1500);

@@ -65,6 +65,15 @@
     const held = await browser.permissions.contains({ permissions: ["tabs"] });
     return held ? "ALREADY GRANTED (unexpected pre-grant)" : "not granted (expected pre-grant)";
   });
+  await attempt("optional webNavigation permission: contains() pre-grant", async () => {
+    const held = await browser.permissions.contains({ permissions: ["webNavigation"] });
+    return held ? "ALREADY GRANTED (unexpected pre-grant)" : "not granted (expected pre-grant)";
+  });
+  await attempt("webNavigation namespace pre-grant (informational)", () =>
+    typeof browser.webNavigation !== "undefined"
+      ? "present pre-grant — listener attaches immediately"
+      : "absent pre-grant — background re-attaches on permissions.onAdded / next worker start (handled)"
+  );
   await attempt("tabs.onUpdated add/removeListener callable without the permission", () => {
     const probe = () => {};
     browser.tabs.onUpdated.addListener(probe);

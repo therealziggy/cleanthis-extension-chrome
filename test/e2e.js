@@ -86,6 +86,18 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
       res.end(SAMPLE_PDF);
       return;
     }
+    // The doorway case: a flagged host that server-redirects instantly, so
+    // its own URL never commits in the tab (the shape of real spamvertised
+    // burner domains). Anything on the redirector host bounces to the plain
+    // page on the ordinary host.
+    if ((req.headers.host || "").startsWith("e2e-redirector.example")) {
+      // Bounce to a host that is NOT flagged and is skipped by the checker
+      // (loopback), so a warning can only come from catching the redirector
+      // itself before the redirect — the thing under test.
+      res.writeHead(301, { Location: `http://127.0.0.1:${FILE_PORT}/landed` });
+      res.end();
+      return;
+    }
     res.writeHead(200, { "Content-Type": "text/html" });
     res.end('<!doctype html><title>downloads</title><a id="dl" href="/sample.pdf">get</a>');
   });
@@ -314,6 +326,18 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     record("download the original anyway", false, err.message);
   }
 
+  // The pre-navigation check aborts the original navigation when it warns, so
+  // Playwright's waitForURL (which tracks that navigation) can reject with
+  // ERR_ABORTED exactly when the feature works. Poll the URL instead.
+  async function urlSettles(page, re, timeoutMs = 15000) {
+    const deadline = Date.now() + timeoutMs;
+    for (;;) {
+      if (re.test(page.url())) return;
+      if (Date.now() > deadline) throw new Error(`url never matched ${re}: ${page.url()}`);
+      await new Promise((r) => setTimeout(r, 200));
+    }
+  }
+
   // ── 5. flagged-site warning: warn → proceed once → warn again ──
   // The harness maps e2e-flagged.example to 127.0.0.1 (a public-looking name;
   // local addresses are skipped by design), and seeds the stored list directly
@@ -325,32 +349,36 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     sw = await worker(context);
     await sw.evaluate(async () => {
       const hash = await self.CleanThisFlagged.hashHost("e2e-flagged.example");
+      const redirectorHash = await self.CleanThisFlagged.hashHost("e2e-redirector.example");
       await chrome.storage.local.set({
         flaggedEnabled: true,
         flaggedList: {
           version: 1,
           etag: null,
           fetchedAt: Date.now(),
-          entries: [[hash, "phishing", "2026-07"]],
+          entries: [
+            [hash, "phishing", "2026-07"],
+            [redirectorHash, "spam", "2026-07"],
+          ],
         },
       });
     });
 
     const page5 = await context.newPage();
     await page5.goto(`http://e2e-flagged.example:${FILE_PORT}/`, { waitUntil: "commit" }).catch(() => {});
-    await page5.waitForURL(/warning\/warning\.html/, { timeout: 15000 });
+    await urlSettles(page5, /warning\/warning\.html/);
     const shownHost = await page5.textContent("#host");
     record("a flagged page is interrupted by the warning", /e2e-flagged\.example/.test(shownHost || ""), shownHost);
 
     await page5.click("#proceed");
-    await page5.waitForURL(`http://e2e-flagged.example:${FILE_PORT}/`, { timeout: 15000 });
+    await urlSettles(page5, new RegExp(`^http:\/\/e2e-flagged\\.example:${FILE_PORT}\/$`));
     const bodyText = await page5.textContent("body");
     record("proceed anyway loads the site once", /get/.test(bodyText || ""));
 
     // A same-URL reload doesn't change the tab's URL, so revisit a different
     // path on the flagged host — tabs.onUpdated only carries url on change.
     await page5.goto(`http://e2e-flagged.example:${FILE_PORT}/again`, { waitUntil: "commit" }).catch(() => {});
-    await page5.waitForURL(/warning\/warning\.html/, { timeout: 15000 });
+    await urlSettles(page5, /warning\/warning\.html/);
     record("the bypass is one-shot: the next visit warns again", true);
 
     // Go back returns to where the user was. (Playwright tabs always open on
@@ -358,20 +386,39 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     // what runs here; the no-history branch is exercised just below.)
     const page5b = await context.newPage();
     await page5b.goto(`http://e2e-flagged.example:${FILE_PORT}/`, { waitUntil: "commit" }).catch(() => {});
-    await page5b.waitForURL(/warning\/warning\.html/, { timeout: 15000 });
+    await urlSettles(page5b, /warning\/warning\.html/);
     await page5b.click("#back");
-    await page5b.waitForURL("about:blank", { timeout: 10000 });
+    await urlSettles(page5b, /^about:blank$/, 10000);
     record("go back returns to the previous page", true);
 
     // The no-history fallback asks the background to close the tab; drive the
     // message directly, the same call warning.js makes.
     const closed = new Promise((resolve) => page5b.once("close", () => resolve(true)));
     await page5b.goto(`http://e2e-flagged.example:${FILE_PORT}/close-me`, { waitUntil: "commit" }).catch(() => {});
-    await page5b.waitForURL(/warning\/warning\.html/, { timeout: 15000 });
+    await urlSettles(page5b, /warning\/warning\.html/);
     // Fire-and-forget: the tab closing kills the evaluate round-trip, so an
     // awaited call would throw "Target closed" precisely when it works.
     page5b.evaluate(() => (typeof browser !== "undefined" ? browser : chrome).runtime.sendMessage({ type: "closeMe" })).catch(() => {});
     record("closeMe closes the warning tab", await Promise.race([closed, new Promise((r) => setTimeout(() => r(false), 10000))]));
+
+    // The doorway case (the 2026-08-19 field report): a flagged host that
+    // 301s away instantly never commits in the tab, so the commit-time check
+    // alone can never see it. The warning must fire from the pre-redirect URL.
+    const page5c = await context.newPage();
+    await page5c.goto(`http://e2e-redirector.example:${FILE_PORT}/`, { waitUntil: "commit" }).catch(() => {});
+    let redirectorWarned = false;
+    try {
+      await urlSettles(page5c, /warning\/warning\.html/);
+      redirectorWarned = /e2e-redirector\.example/.test((await page5c.textContent("#host")) || "");
+    } catch (_) {
+      /* recorded below */
+    }
+    record(
+      "a flagged host that redirects instantly still warns",
+      redirectorWarned,
+      redirectorWarned ? "" : `no warning — landed on ${page5c.url()}`
+    );
+    await page5c.close().catch(() => {});
 
     await page5.close().catch(() => {});
     sw = await worker(context);

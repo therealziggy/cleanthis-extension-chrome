@@ -41,9 +41,11 @@ async function tryLaunch(browserPath, extDir) {
       "--disable-features=DisableLoadExtensionCommandLineSwitch",
       `--disable-extensions-except=${extDir}`,
       `--load-extension=${extDir}`,
-      // The flagged-site E2E needs a public-looking hostname that resolves to
+      // The flagged-site E2E needs public-looking hostnames that resolve to
       // the local fixture server (local addresses are skipped by design).
-      "--host-resolver-rules=MAP e2e-flagged.example 127.0.0.1",
+      // e2e-redirector.example models the doorway case: flagged host that
+      // 301s away instantly, so its URL never commits in the tab.
+      "--host-resolver-rules=MAP e2e-flagged.example 127.0.0.1, MAP e2e-redirector.example 127.0.0.1",
     ],
   });
 
