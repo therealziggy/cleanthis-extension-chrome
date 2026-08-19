@@ -13,7 +13,7 @@
 // Chrome loads the shared libraries into the worker here; Firefox lists them
 // in the manifest instead (event pages have no importScripts).
 if (typeof importScripts === "function") {
-  importScripts("lib/api.js", "lib/intercept.js", "lib/filetypes.js");
+  importScripts("lib/api.js", "lib/intercept.js", "lib/filetypes.js", "lib/flagged.js");
 }
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
@@ -439,12 +439,27 @@ if (ext.runtime.onStartup) ext.runtime.onStartup.addListener(() => recoverInterr
 // The popup lists whatever is still pending and asks us to carry it out, so
 // the actual doing stays here in one place whether it was started from a
 // notification or from the popup.
-ext.runtime.onMessage.addListener((message, _sender, sendResponse) => {
-  if (!message || message.type !== "runAction") return undefined;
-  runAction(message.id)
-    .then(() => sendResponse({ ok: true }))
-    .catch(() => sendResponse({ ok: false }));
-  return true;
+ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!message) return undefined;
+  if (message.type === "runAction") {
+    runAction(message.id)
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+  if (message.type === "flaggedEnabled") {
+    // The options page just turned warnings on: fetch the list right away.
+    refreshFlaggedList()
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+  if (message.type === "closeMe" && sender.tab && sender.tab.id !== undefined) {
+    // The warning page asked to close its own tab (no history to go back to).
+    ext.tabs.remove(sender.tab.id).catch(() => {});
+    return undefined;
+  }
+  return undefined;
 });
 
 ext.downloads.onCreated.addListener((item) => {
@@ -452,6 +467,72 @@ ext.downloads.onCreated.addListener((item) => {
     /* handleDownload reports its own failures to the user */
   });
 });
+
+// ── flagged-site warnings (opt-in, default OFF) ───────────────
+// The visited address is checked ON THIS DEVICE against a downloaded list —
+// it never leaves the machine. tabs.onUpdated itself needs no permission;
+// the optional "tabs" permission is what makes changeInfo.url visible, so
+// before the user opts in (and grants it) this listener sees no URLs at all.
+// Registration stays top-level and unconditional: MV3 workers must register
+// listeners synchronously at startup for wake-up delivery.
+
+const flagged = self.CleanThisFlagged;
+
+// The decoded list is rebuilt only when the stored version changes.
+let flaggedIndex = { version: null, index: null };
+
+let flaggedRefreshInFlight = null;
+function refreshFlaggedList() {
+  if (!flaggedRefreshInFlight) {
+    flaggedRefreshInFlight = flagged
+      .refreshList(ext)
+      .finally(() => {
+        flaggedRefreshInFlight = null;
+      });
+  }
+  return flaggedRefreshInFlight;
+}
+
+async function maybeRefreshFlaggedList() {
+  const stored = await ext.storage.local.get(["flaggedEnabled", flagged.LIST_KEY]);
+  if (stored.flaggedEnabled !== true) return;
+  if (flagged.listStale(stored[flagged.LIST_KEY])) await refreshFlaggedList();
+}
+
+async function onTabUpdated(tabId, changeInfo) {
+  if (!changeInfo || !changeInfo.url) return;
+  const host = flagged.canonicalHost(changeInfo.url);
+  if (!host) return;
+
+  const stored = await ext.storage.local.get(["flaggedEnabled", flagged.LIST_KEY]);
+  if (stored.flaggedEnabled !== true) return;
+
+  const list = stored[flagged.LIST_KEY];
+  if (flagged.listStale(list)) refreshFlaggedList(); // background top-up; this check uses what's here
+  if (!list || !Array.isArray(list.entries) || !list.entries.length) return;
+
+  if (flaggedIndex.version !== list.version || !flaggedIndex.index) {
+    flaggedIndex = { version: list.version, index: flagged.buildIndex(list.entries) };
+  }
+
+  // A one-shot grant from the warning page's "Proceed anyway".
+  if (await flagged.takeBypass(ext, host)) return;
+
+  const hit = await flagged.check(changeInfo.url, flaggedIndex.index);
+  if (!hit) return;
+
+  const params = new URLSearchParams({ to: changeInfo.url, cat: hit.cat });
+  if (hit.seen) params.set("seen", hit.seen);
+  try {
+    await ext.tabs.update(tabId, { url: `${ext.runtime.getURL("warning/warning.html")}?${params}` });
+  } catch (_) {
+    /* tab already gone */
+  }
+}
+
+ext.tabs.onUpdated.addListener(onTabUpdated);
+maybeRefreshFlaggedList().catch(() => {});
+if (ext.runtime.onStartup) ext.runtime.onStartup.addListener(() => maybeRefreshFlaggedList().catch(() => {}));
 
 ext.runtime.onInstalled.addListener(() => {
   console.log("CleanThis installed");
