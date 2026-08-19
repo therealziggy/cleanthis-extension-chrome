@@ -448,7 +448,9 @@ ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
   if (message.type === "flaggedEnabled") {
-    // The options page just turned warnings on: fetch the list right away.
+    // The options page just turned warnings on: attach the pre-navigation
+    // listener (the permission was granted moments ago) and fetch the list.
+    syncWebNavListener();
     refreshFlaggedList()
       .then(() => sendResponse({ ok: true }))
       .catch(() => sendResponse({ ok: false }));
@@ -499,29 +501,35 @@ async function maybeRefreshFlaggedList() {
   if (flagged.listStale(stored[flagged.LIST_KEY])) await refreshFlaggedList();
 }
 
-async function onTabUpdated(tabId, changeInfo) {
-  if (!changeInfo || !changeInfo.url) return;
-  const host = flagged.canonicalHost(changeInfo.url);
-  if (!host) return;
+// One navigation crosses BOTH checkpoints below (pre-navigation, then
+// commit), so a proceed-anyway grant is PEEKED at the first and CONSUMED only
+// at the second — consuming twice would warn straight after every proceed.
+async function flaggedVerdictFor(url, { consume }) {
+  const host = flagged.canonicalHost(url);
+  if (!host) return null;
 
   const stored = await ext.storage.local.get(["flaggedEnabled", flagged.LIST_KEY]);
-  if (stored.flaggedEnabled !== true) return;
+  if (stored.flaggedEnabled !== true) return null;
 
   const list = stored[flagged.LIST_KEY];
   if (flagged.listStale(list)) refreshFlaggedList(); // background top-up; this check uses what's here
-  if (!list || !Array.isArray(list.entries) || !list.entries.length) return;
+  if (!list || !Array.isArray(list.entries) || !list.entries.length) return null;
 
   if (flaggedIndex.version !== list.version || !flaggedIndex.index) {
     flaggedIndex = { version: list.version, index: flagged.buildIndex(list.entries) };
   }
 
-  // A one-shot grant from the warning page's "Proceed anyway".
-  if (await flagged.takeBypass(ext, host)) return;
+  const bypassed = consume ? await flagged.takeBypass(ext, host) : await flagged.peekBypass(ext, host);
+  if (bypassed) return null;
 
-  const hit = await flagged.check(changeInfo.url, flaggedIndex.index);
-  if (!hit) return;
+  return flagged.check(url, flaggedIndex.index);
+}
 
-  const params = new URLSearchParams({ to: changeInfo.url, cat: hit.cat });
+// `via` tells the warning page how the flagged URL sits in history: a
+// commit-time warn is layered ON TOP of the flagged entry (go back = -2),
+// a pre-navigation warn replaced a navigation that never committed (-1).
+async function warnTab(tabId, url, hit, via) {
+  const params = new URLSearchParams({ to: url, cat: hit.cat, via });
   if (hit.seen) params.set("seen", hit.seen);
   try {
     await ext.tabs.update(tabId, { url: `${ext.runtime.getURL("warning/warning.html")}?${params}` });
@@ -530,9 +538,47 @@ async function onTabUpdated(tabId, changeInfo) {
   }
 }
 
+// Commit-time check: catches flagged hosts the user actually lands on.
+async function onTabUpdated(tabId, changeInfo) {
+  if (!changeInfo || !changeInfo.url) return;
+  const hit = await flaggedVerdictFor(changeInfo.url, { consume: true });
+  if (hit) await warnTab(tabId, changeInfo.url, hit, "commit");
+}
+
+// Pre-navigation check: sees the REQUESTED url before the server answers —
+// the only view that catches flagged hosts which redirect away instantly
+// (spamvertised burner domains 301 elsewhere, so their URL never commits and
+// tabs.onUpdated alone is blind to them — 2026-08-19 field report).
+async function onBeforeNavigate(details) {
+  if (!details || details.frameId !== 0 || !details.url) return;
+  const hit = await flaggedVerdictFor(details.url, { consume: false });
+  if (hit) await warnTab(details.tabId, details.url, hit, "nav");
+}
+
+// webNavigation is an OPTIONAL permission: its namespace may be missing until
+// granted (and, on some builds, until the worker restarts after the grant).
+// Registration is therefore defensive-but-eager: top level for wake-safety,
+// again on grant, and again when the options page announces the toggle.
+function syncWebNavListener() {
+  const api = ext.webNavigation;
+  if (!api || !api.onBeforeNavigate) return; // not granted (or not yet visible)
+  if (!api.onBeforeNavigate.hasListener(onBeforeNavigate)) {
+    api.onBeforeNavigate.addListener(onBeforeNavigate);
+  }
+}
+
 ext.tabs.onUpdated.addListener(onTabUpdated);
+syncWebNavListener();
+if (ext.permissions && ext.permissions.onAdded) {
+  ext.permissions.onAdded.addListener(() => syncWebNavListener());
+}
 maybeRefreshFlaggedList().catch(() => {});
-if (ext.runtime.onStartup) ext.runtime.onStartup.addListener(() => maybeRefreshFlaggedList().catch(() => {}));
+if (ext.runtime.onStartup) {
+  ext.runtime.onStartup.addListener(() => {
+    syncWebNavListener();
+    maybeRefreshFlaggedList().catch(() => {});
+  });
+}
 
 ext.runtime.onInstalled.addListener(() => {
   console.log("CleanThis installed");

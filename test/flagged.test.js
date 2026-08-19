@@ -105,6 +105,20 @@ test("check matches the exact host and an apex through the walk; misses return n
 
 // ── bypass: one-shot with expiry ──────────────────────────────
 
+test("peekBypass sees a grant without consuming it", async () => {
+  const ext = fakeExt();
+  await flagged.grantBypass(ext, "evil-fixture.example");
+  assert.strictEqual(await flagged.peekBypass(ext, "evil-fixture.example"), true);
+  assert.strictEqual(await flagged.peekBypass(ext, "evil-fixture.example"), true); // still there
+  assert.strictEqual(await flagged.peekBypass(ext, "other.example"), false);
+  assert.strictEqual(await flagged.takeBypass(ext, "evil-fixture.example"), true); // consume works after peeks
+  assert.strictEqual(await flagged.peekBypass(ext, "evil-fixture.example"), false); // gone once taken
+
+  const store = ext.storage.session;
+  await store.set({ flaggedBypass: { host: "evil-fixture.example", until: Date.now() - 1 } });
+  assert.strictEqual(await flagged.peekBypass(ext, "evil-fixture.example"), false); // expired
+});
+
 test("takeBypass consumes exactly once and respects expiry", async () => {
   const ext = fakeExt();
   await flagged.grantBypass(ext, "evil-fixture.example");

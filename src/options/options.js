@@ -99,12 +99,22 @@ async function load() {
   // The toggle reflects reality: enabled AND the permission still held (it
   // can be revoked from the browser's own extension settings at any time).
   let flaggedPerm = false;
+  let webNavPerm = false;
   try {
     flaggedPerm = await ext.permissions.contains({ permissions: ["tabs"] });
+    webNavPerm = await ext.permissions.contains({ permissions: ["webNavigation"] });
   } catch (_) {
     flaggedPerm = false;
   }
   els.flagged.checked = stored.flaggedEnabled === true && flaggedPerm;
+
+  // Installs that granted only "tabs" (v0.5.0) miss flagged sites that
+  // redirect away instantly. One off-and-on of the toggle grants the rest.
+  if (els.flagged.checked && !webNavPerm) {
+    els.flaggedStatus.textContent =
+      "Sites that redirect immediately need one more browser permission — switch this off and back on once to add it.";
+    els.flaggedStatus.hidden = false;
+  }
 
   ({ payload: catalogue } = await fileTypes.getConfig(ext));
   renderGroups(catalogue, fileTypes.effectiveExts(stored.interceptExts, catalogue));
@@ -123,9 +133,9 @@ els.enabled.addEventListener("change", () => {
   ext.storage.local.set({ interceptEnabled: els.enabled.checked });
 });
 
-// Turning warnings on needs the optional "tabs" permission, and the request
-// MUST run inside this change handler — the browser only honours it from a
-// user gesture. A declined prompt snaps the toggle back off.
+// Turning warnings on needs the optional "tabs" + "webNavigation" permissions
+// (one prompt), and the request MUST run inside this change handler — the
+// browser only honours it from a user gesture. Declined → toggle snaps off.
 els.flagged.addEventListener("change", async () => {
   els.flaggedStatus.hidden = true;
   if (!els.flagged.checked) {
@@ -134,7 +144,7 @@ els.flagged.addEventListener("change", async () => {
   }
   let granted = false;
   try {
-    granted = await ext.permissions.request({ permissions: ["tabs"] });
+    granted = await ext.permissions.request({ permissions: ["tabs", "webNavigation"] });
   } catch (_) {
     granted = false;
   }

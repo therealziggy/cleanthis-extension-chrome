@@ -84,7 +84,7 @@ if (process.argv.includes("--dev")) {
   // The shipped build asks for "tabs" at runtime (optional_permissions), but a
   // permission prompt can't be clicked from the E2E harness — so the dev build
   // grants it at install. Dev-only; the release manifests are untouched.
-  if (!manifest.permissions.includes("tabs")) manifest.permissions.push("tabs");
+  for (const p of ["tabs", "webNavigation"]) if (!manifest.permissions.includes(p)) manifest.permissions.push(p);
   const outDir = path.join(ROOT, "dist", "chrome-dev");
   fs.rmSync(outDir, { recursive: true, force: true });
   fs.mkdirSync(outDir, { recursive: true });

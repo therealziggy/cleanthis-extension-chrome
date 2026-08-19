@@ -93,6 +93,20 @@
     await bypassStore(ext).set({ [BYPASS_KEY]: { host, until: Date.now() + BYPASS_TTL_MS } });
   }
 
+  // Peek: does a matching, unexpired grant exist? Never deletes. The
+  // pre-navigation check uses this so the commit-time check (which consumes)
+  // stays the single point where a grant is spent — one navigation crosses
+  // both checkpoints, and a proceed must survive to the commit.
+  async function peekBypass(ext, host) {
+    let grant = null;
+    try {
+      ({ [BYPASS_KEY]: grant = null } = await bypassStore(ext).get(BYPASS_KEY));
+    } catch (_) {
+      return false;
+    }
+    return !!grant && grant.host === host && grant.until >= Date.now();
+  }
+
   // Consume-on-read: a matching, unexpired grant is deleted and honoured once.
   async function takeBypass(ext, host) {
     const store = bypassStore(ext);
@@ -180,6 +194,7 @@
     buildIndex,
     check,
     grantBypass,
+    peekBypass,
     takeBypass,
     listStale,
     refreshList,

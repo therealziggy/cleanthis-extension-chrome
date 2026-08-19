@@ -33,10 +33,12 @@ addresses you visit are never sent to cleanthis.io or anyone else, and no page i
 scanned automatically. The list download itself is the same kind of plain configuration
 request as above — it carries nothing about you.
 
-Turning the feature on asks for the browser's "tabs" permission. That permission is
-what lets the extension see the address of the page being checked — locally. Turning
-the feature off stops all checking; you can also revoke the permission from your
-browser's extension settings at any time.
+Turning the feature on asks for the browser's "tabs" and "webNavigation" permissions
+in one prompt. Together they are what let the extension see the address of a page as
+it starts to load — locally. Both matter: many flagged sites redirect somewhere else
+in an instant, so the check has to happen before the site answers, or the dangerous
+address is never seen at all. Turning the feature off stops all checking; you can also
+revoke the permissions from your browser's extension settings at any time.
 
 A warning never blocks a site outright: "Proceed anyway" always loads it.
 
