@@ -122,18 +122,35 @@ const STEPS = [
   "Rebuilding from safe content",
 ];
 
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+function ringCircle(className, extra = {}) {
+  const circle = document.createElementNS(SVG_NS, "circle");
+  circle.setAttribute("class", className);
+  circle.setAttribute("cx", "66");
+  circle.setAttribute("cy", "66");
+  circle.setAttribute("r", "55");
+  circle.setAttribute("stroke-width", "11");
+  circle.setAttribute("fill", "none");
+  for (const [name, value] of Object.entries(extra)) circle.setAttribute(name, value);
+  return circle;
+}
+
 function buildRing() {
   const root = text("div", "ct-ring");
-  root.innerHTML =
-    '<svg viewBox="0 0 132 132" width="132" height="132" aria-hidden="true">' +
-    '<circle class="track" cx="66" cy="66" r="55" stroke-width="11" fill="none"></circle>' +
-    '<circle class="bar" cx="66" cy="66" r="55" stroke-width="11" fill="none" ' +
-    'stroke-dasharray="345.6" stroke-dashoffset="345.6"></circle></svg>';
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("viewBox", "0 0 132 132");
+  svg.setAttribute("width", "132");
+  svg.setAttribute("height", "132");
+  svg.setAttribute("aria-hidden", "true");
+  const bar = ringCircle("bar", { "stroke-dasharray": "345.6", "stroke-dashoffset": "345.6" });
+  svg.append(ringCircle("track"), bar);
+  root.append(svg);
   const label = text("div", "ct-ring-label");
   const pct = text("span", "pct", "0%");
   label.append(pct, text("span", "sub", `${levelLabel(currentLevel)} clean`));
   root.append(label);
-  return { root, bar: root.querySelector(".bar"), pct };
+  return { root, bar, pct };
 }
 
 function buildChecklist() {
@@ -378,9 +395,20 @@ function renderDone(finished, file, job, settle) {
 
   const head = text("div", "done-head");
   const tile = text("div", "ct-tile green big");
-  tile.innerHTML =
-    '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
-    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+  const check = document.createElementNS(SVG_NS, "svg");
+  check.setAttribute("width", "26");
+  check.setAttribute("height", "26");
+  check.setAttribute("viewBox", "0 0 24 24");
+  check.setAttribute("fill", "none");
+  check.setAttribute("stroke", "currentColor");
+  check.setAttribute("stroke-width", "2");
+  check.setAttribute("stroke-linecap", "round");
+  check.setAttribute("stroke-linejoin", "round");
+  check.setAttribute("aria-hidden", "true");
+  const checkPath = document.createElementNS(SVG_NS, "path");
+  checkPath.setAttribute("d", "M20 6L9 17l-5-5");
+  check.append(checkPath);
+  tile.append(check);
   head.append(tile);
   const headText = text("div", "done-headtext");
   headText.append(text("h2", "state-title", "Scrubbed. All yours."));
