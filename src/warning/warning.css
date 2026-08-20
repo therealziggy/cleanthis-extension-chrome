@@ -25,10 +25,13 @@ body {
   align-items: center;
   justify-content: center;
   margin-bottom: 14px;
-  font-size: 26px;
   color: #92400e;
-  background: #fef3c7;
+  background: var(--ct-amber-tint);
   border-radius: 50%;
+}
+
+@media (prefers-color-scheme: dark) {
+  .badge { color: var(--ct-amber-ink); }
 }
 
 h1 {
