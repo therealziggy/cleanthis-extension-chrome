@@ -9,6 +9,7 @@
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 const api = self.CleanThisApi;
+const vlib = self.CleanThisVerdict;
 
 const els = {
   settingsBtn: document.getElementById("settings-btn"),
@@ -309,8 +310,6 @@ els.cancelScan.addEventListener("click", () => {
 
 // ── verdict rendering ─────────────────────────────────────────
 
-const SCORE_LABEL = { security: "Security", privacy: "Privacy", legitimacy: "Legitimacy" };
-
 const GLYPHS = {
   check: ["M20 6L9 17l-5-5"],
   warn: ["M12 4l9 16H3z", "M12 10v4", "M12 17.4h.01"],
@@ -353,6 +352,64 @@ function tile(kind, glyph) {
   return box;
 }
 
+// One score wheel — the site's ring-gauge geometry (72×72, r=30, stroke 7),
+// DOM-built like every other SVG here. Band color rides a class on the wrap;
+// the arc and number pick it up via currentColor.
+function wheel(state, name) {
+  const NS = "http://www.w3.org/2000/svg";
+  const wrap = text("div", `wheel band-${state.band}`);
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("viewBox", "0 0 72 72");
+  svg.setAttribute("width", "72");
+  svg.setAttribute("height", "72");
+  svg.setAttribute("aria-hidden", "true");
+  const circumference = 2 * Math.PI * 30;
+
+  const track = document.createElementNS(NS, "circle");
+  for (const [attr, val] of [["cx", "36"], ["cy", "36"], ["r", "30"], ["fill", "none"], ["stroke-width", "7"]]) {
+    track.setAttribute(attr, val);
+  }
+  track.setAttribute("class", "wheel-track");
+  svg.append(track);
+
+  if (!state.none) {
+    const arc = document.createElementNS(NS, "circle");
+    for (const [attr, val] of [["cx", "36"], ["cy", "36"], ["r", "30"], ["fill", "none"], ["stroke-width", "7"], ["stroke-linecap", "round"]]) {
+      arc.setAttribute(attr, val);
+    }
+    arc.setAttribute("class", "wheel-arc");
+    const filled = (circumference * Math.max(0, Math.min(100, Number(state.value)))) / 100;
+    arc.setAttribute("stroke-dasharray", `${filled.toFixed(1)} ${circumference.toFixed(1)}`);
+    arc.setAttribute("transform", "rotate(-90 36 36)");
+    svg.append(arc);
+  }
+
+  const num = document.createElementNS(NS, "text");
+  num.setAttribute("x", "36");
+  num.setAttribute("y", "41");
+  num.setAttribute("text-anchor", "middle");
+  num.setAttribute("class", "wheel-num");
+  num.textContent = state.value;
+  svg.append(num);
+
+  if (!state.none) {
+    const denom = document.createElementNS(NS, "text");
+    denom.setAttribute("x", "36");
+    denom.setAttribute("y", "52");
+    denom.setAttribute("text-anchor", "middle");
+    denom.setAttribute("class", "wheel-denom");
+    denom.textContent = "/ 100";
+    svg.append(denom);
+  }
+
+  wrap.append(svg);
+  wrap.append(text("div", "wheel-name", name));
+  const driver = text("div", "wheel-driver", state.driver);
+  if (state.suffix) driver.append(text("span", "wheel-cov", state.suffix));
+  wrap.append(driver);
+  return wrap;
+}
+
 function reportUrl(url) {
   return `${api.baseUrl}/webpage-scanner.html?url=${encodeURIComponent(url)}`;
 }
@@ -381,36 +438,17 @@ function renderVerdict(url, tabId, result) {
   head.append(headText);
   els.verdict.append(head);
 
+  // The site's three score wheels, always — per-axis reason under each wheel,
+  // one overall statement below (same strings as the website's report).
   const scores = result.scores || {};
-  const drivers = [];
-  for (const key of ["security", "privacy", "legitimacy"]) {
-    const score = scores[key];
-    if (score && score.driver && !drivers.includes(score.driver)) drivers.push(score.driver);
+  const wheels = text("div", "wheels");
+  for (const [key, name] of [["security", "Security"], ["privacy", "Privacy"], ["legitimacy", "Legitimacy"]]) {
+    wheels.append(wheel(vlib.wheelState(scores[key]), name));
   }
+  els.verdict.append(wheels);
 
-  if (verdict === "clean") {
-    const cells = text("div", "scorecells");
-    for (const key of ["security", "privacy", "legitimacy"]) {
-      const score = scores[key];
-      if (!score) continue;
-      const cell = text("div", `cell band-${score.band || "none"}`);
-      const value = score.value === null || score.value === undefined ? "—" : String(score.value);
-      cell.append(text("div", "value", value));
-      cell.append(text("div", "caption", SCORE_LABEL[key]));
-      cells.append(cell);
-    }
-    if (cells.childElementCount) els.verdict.append(cells);
-  } else if (drivers.length) {
-    const list = text("div", "findings");
-    drivers.forEach((driver, i) => {
-      const tone = verdict === "malicious" ? "red" : i === 0 ? "amber" : "";
-      const row = text("div", `finding ${tone}`.trim());
-      row.append(text("span", "glyph", verdict === "malicious" ? "✕" : "▲"));
-      row.append(text("span", null, driver));
-      list.append(row);
-    });
-    els.verdict.append(list);
-  }
+  const statement = vlib.statementFor(verdict, result.findings);
+  els.verdict.append(text("p", `statement ${statement.strong ? "strong" : ""}`.trim(), statement.text));
 
   const actions = text("div", "verdict-actions");
   if (verdict === "malicious") {
