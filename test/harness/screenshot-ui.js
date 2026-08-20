@@ -40,6 +40,11 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
           why: "The clean finished after the download was cancelled.",
           label: "Save cleaned file",
         },
+        "shot-2": {
+          name: "setup-helper.zip",
+          why: "We couldn't clean this one. Your call.",
+          label: "Download the unsafe original",
+        },
       },
     });
   }, BASE);
@@ -52,15 +57,41 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
     written.push(file);
   }
 
-  // ── popup (scan result + pending card) ────────────────────
+  // ── popup: every view, driven through the __ctPopup harness hook ──
   const popup = await context.newPage();
   await popup.goto(`chrome-extension://${extensionId}/popup/popup.html`, { waitUntil: "load" });
+  await popup.setViewportSize({ width: 360, height: 640 });
   await popup.evaluate((base) => { self.CleanThisApi.baseUrl = base; }, BASE);
+  await popup.evaluate(() => {
+    const ext = typeof browser !== "undefined" ? browser : chrome;
+    ext.tabs.query = async () => [{ id: 1, url: "https://verify-human-check.top/login" }];
+  });
 
+  async function shootPopup(name) {
+    await shoot(popup, name, "light", { fullPage: true });
+    await shoot(popup, name, "dark", { fullPage: true });
+  }
+
+  // idle — with the two seeded pending actions on show
+  await popup.evaluate(async () => {
+    await self.__ctPopup.refreshPending();
+    self.__ctPopup.showView("idle");
+    return document.getElementById("site").textContent;
+  });
+  await popup.waitForTimeout(150);
+  await shootPopup("popup-idle");
+
+  // scanning — frozen mid-flight at 42%
+  await popup.evaluate(() => {
+    document.getElementById("scan-site").textContent = "verify-human-check.top";
+    self.__ctPopup.showView("scanning");
+    self.__ctPopup.setRing(42);
+  });
+  await shootPopup("popup-scanning");
+
+  // verdict (clean) — through the real click path so the flow stays honest
   if (process.env.LIVE_SCAN !== "1") {
     await popup.evaluate(() => {
-      const ext = typeof browser !== "undefined" ? browser : chrome;
-      ext.tabs.query = async () => [{ url: "https://example.com" }];
       self.CleanThisApi.scanUrl = async () => ({
         ok: true,
         verdict: "clean",
@@ -71,18 +102,43 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
         },
       });
     });
-  } else {
-    await popup.evaluate(() => {
-      const ext = typeof browser !== "undefined" ? browser : chrome;
-      ext.tabs.query = async () => [{ url: "https://example.com" }];
-    });
   }
-
+  await popup.evaluate(() => self.__ctPopup.showView("idle"));
   await popup.click("#scan-page");
-  await popup.waitForSelector(".verdict", { timeout: 60000 });
-  await popup.setViewportSize({ width: 340, height: 560 });
-  await shoot(popup, "popup-scan", "light");
-  await shoot(popup, "popup-scan", "dark");
+  await popup.waitForSelector("#view-verdict:not([hidden]) .verdict-title", { timeout: 60000 });
+  await shootPopup("popup-verdict-clean");
+
+  // verdict (malicious) — driven directly; no server call, no quota
+  await popup.evaluate(() => {
+    self.__ctPopup.renderVerdict("https://verify-human-check.top/login", 1, {
+      verdict: "malicious",
+      scores: {
+        security: {
+          value: 4, band: "red", coverage: "full",
+          driver: "A fake “verify you are human” page that wants you to paste a command into your terminal. Don't.",
+        },
+      },
+    });
+    self.__ctPopup.showView("verdict");
+  });
+  await shootPopup("popup-verdict-malicious");
+
+  // settings
+  await popup.click("#settings-btn");
+  await popup.waitForSelector("#view-settings:not([hidden])");
+  await shootPopup("popup-settings");
+
+  // errors — hard (offline) and soft (quota, with a real reset time seeded)
+  await popup.evaluate(async () => {
+    await self.__ctPopup.renderError("offline");
+    self.__ctPopup.showView("error");
+  });
+  await shootPopup("popup-error-offline");
+  await popup.evaluate(async () => {
+    await self.__ctPopup.renderError("quota");
+    self.__ctPopup.showView("error");
+  });
+  await shootPopup("popup-error-quota");
 
   // ── clean page (idle drop zone) ───────────────────────────
   const clean = await context.newPage();
