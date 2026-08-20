@@ -180,12 +180,16 @@
     return { "X-Form-Token": token, "X-Form-Hp": "", ...extra };
   }
 
-  async function scanUrl(url, tier = "standard", { signal } = {}) {
+  async function scanUrl(url, tier = "standard", { signal, bypassCache } = {}) {
     const token = await getFormToken("scan-webpage", { signal });
+    const body = { url, tier };
+    // The server serves a 24h cache by default; a deliberate re-scan asks for
+    // a fresh run (same flag the website's Re-scan button sends).
+    if (bypassCache) body.bypassCache = true;
     return request("/api/scan-url", {
       method: "POST",
       headers: formHeaders(token, { "Content-Type": "application/json" }),
-      body: JSON.stringify({ url, tier }),
+      body: JSON.stringify(body),
       bucket: BUCKETS.scan,
       signal,
     });

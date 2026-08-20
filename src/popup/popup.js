@@ -267,7 +267,10 @@ function stopRing() {
 let scanController = null;
 let lastScan = null; // { url, tabId } — verdict actions need both
 
-async function startScan() {
+async function startScan(bypass) {
+  // A deliberate Rescan asks the server for a fresh run instead of the 24h
+  // cached result — same contract as the website's Re-scan button.
+  const fresh = bypass === true;
   const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
   const url = tab && tab.url;
 
@@ -284,7 +287,7 @@ async function startScan() {
   startRing();
 
   try {
-    const result = await api.scanUrl(url, "standard", { signal: scanController.signal });
+    const result = await api.scanUrl(url, "standard", { signal: scanController.signal, bypassCache: fresh });
     await finishRing();
     renderVerdict(url, tab.id, result);
     showView("verdict");
@@ -302,7 +305,7 @@ async function startScan() {
   }
 }
 
-els.scanBtn.addEventListener("click", startScan);
+els.scanBtn.addEventListener("click", () => startScan(false));
 
 els.cancelScan.addEventListener("click", () => {
   if (scanController) scanController.abort();
@@ -467,7 +470,7 @@ function renderVerdict(url, tabId, result) {
     actions.append(actionButton("primary-act", "Full report ↗", () => {
       ext.tabs.create({ url: reportUrl(url) });
     }));
-    actions.append(actionButton("secondary", "Rescan", startScan));
+    actions.append(actionButton("secondary", "Rescan", () => startScan(true)));
   }
   els.verdict.append(actions);
 
@@ -556,7 +559,7 @@ async function renderError(kind, err) {
   els.error.append(block);
 
   const actions = text("div", "error-actions");
-  if (spec.retry) actions.append(actionButton("", "Try again", startScan));
+  if (spec.retry) actions.append(actionButton("", "Try again", () => startScan(false)));
   actions.append(actionButton("secondary", "Back", () => showView("idle")));
   els.error.append(actions);
 }
@@ -624,6 +627,17 @@ els.flagged.addEventListener("change", async () => {
     await ext.storage.local.set({ flaggedEnabled: false });
     return;
   }
+  // Record the intent BEFORE requesting: the browser's grant prompt steals
+  // focus and can kill this popup mid-await — the user clicks Allow, the
+  // permission lands, but the code below never runs. The background's
+  // permissions.onAdded listener sees this marker and finishes the enable
+  // (completeFlaggedIntent in background.js). If we survive, we clear it and
+  // proceed normally; both paths are idempotent.
+  try {
+    await ext.storage.local.set({ flaggedPendingAt: Date.now() });
+  } catch (_) {
+    /* worst case we're back to the popup-only flow */
+  }
   let granted = false;
   let requestFailed = false;
   try {
@@ -631,6 +645,11 @@ els.flagged.addEventListener("change", async () => {
   } catch (_) {
     granted = false;
     requestFailed = true;
+  }
+  try {
+    await ext.storage.local.remove("flaggedPendingAt");
+  } catch (_) {
+    /* the background sweeps stale intents anyway */
   }
   if (!granted) {
     els.flagged.checked = false;

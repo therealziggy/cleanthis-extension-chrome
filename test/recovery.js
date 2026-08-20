@@ -293,6 +293,37 @@ function record(name, ok, detail) {
     outlivesToast.started === "https://example.com/toast.pdf" && outlivesToast.clearedAfterUse === true
   );
 
+  // The flagged-toggle grant can outlive the popup: the browser's permission
+  // prompt steals focus, the popup dies, and the change handler's continuation
+  // (which would write flaggedEnabled) never runs even though the user clicked
+  // Allow. The popup records intent BEFORE requesting; the background completes
+  // it on permissions.onAdded. (The dev build holds "tabs" from install, so
+  // permissions.contains is true here — exactly the post-grant world.)
+  const intent = await sw.evaluate(async () => {
+    const out = {};
+    await chrome.storage.local.remove(["flaggedEnabled", "flaggedPendingAt"]);
+    // 1. No intent recorded → a grant alone must not enable the feature.
+    await self.completeFlaggedIntent();
+    out.noIntent = (await chrome.storage.local.get("flaggedEnabled")).flaggedEnabled === undefined;
+    // 2. Fresh intent + grant → the background finishes the job.
+    await chrome.storage.local.set({ flaggedPendingAt: Date.now() });
+    await self.completeFlaggedIntent();
+    const after = await chrome.storage.local.get(["flaggedEnabled", "flaggedPendingAt"]);
+    out.enabled = after.flaggedEnabled === true;
+    out.cleared = after.flaggedPendingAt === undefined;
+    // 3. A stale intent (user walked away mid-prompt days ago) only gets swept.
+    await chrome.storage.local.remove("flaggedEnabled");
+    await chrome.storage.local.set({ flaggedPendingAt: Date.now() - 10 * 60 * 1000 });
+    await self.completeFlaggedIntent();
+    const stale = await chrome.storage.local.get(["flaggedEnabled", "flaggedPendingAt"]);
+    out.staleIgnored = stale.flaggedEnabled === undefined && stale.flaggedPendingAt === undefined;
+    await chrome.storage.local.remove(["flaggedEnabled", "flaggedPendingAt"]);
+    return out;
+  });
+  record("flagged grant: no recorded intent → not enabled", intent.noIntent === true);
+  record("flagged grant: fresh intent completes after the popup died", intent.enabled === true && intent.cleared === true);
+  record("flagged grant: a stale intent is swept, not activated", intent.staleIgnored === true);
+
   // Badge tiers: amber count for waiting decisions; a failed clean outranks
   // the count with a red "!" — never both at once.
   const badgeTiers = await sw.evaluate(async () => {
