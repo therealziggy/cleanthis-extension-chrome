@@ -744,7 +744,7 @@ els.levelSeg.addEventListener("click", (event) => {
 // The UI harness drives the popup into each view to photograph it. Nothing
 // here is reachable from web content — the popup page is extension-internal.
 
-self.__ctPopup = { showView, setRing, renderVerdict, renderError, refreshPending };
+self.__ctPopup = { showView, setRing, renderVerdict, renderError, refreshPending, refreshSite };
 
 // ── boot ──────────────────────────────────────────────────────
 
