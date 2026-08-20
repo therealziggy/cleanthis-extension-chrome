@@ -35,7 +35,10 @@ Features:
   a known-bad site loads, powered by a local copy of CleanThis's flagged-site list.
   Checks happen entirely **on your device**: the addresses you visit are never sent
   anywhere, and nothing is scanned automatically. Never a hard block — "Proceed
-  anyway" is always there. Turning it on asks for the browser's "tabs" permission.
+  anyway" is always there. Hacked-but-legitimate sites get a gentler treatment: a
+  one-time heads-up notification instead of a wall, while the specific dangerous
+  links on them still get the full warning page. Turning it on asks for the
+  browser's "tabs" and "webNavigation" permissions in one prompt.
 
 cleanthis.io allows a set number of scans and files per day per user. The extension
 shows what's left, and pauses instead of retrying when the allowance runs out or the
