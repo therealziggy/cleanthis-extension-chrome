@@ -56,14 +56,30 @@
     return out;
   }
 
-  // First 16 hex chars of SHA-256, identical to the server's builder.
-  async function hashHost(host) {
-    const canonical = String(host).toLowerCase().replace(/\.$/, "");
-    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(canonical));
+  async function sha16(text) {
+    const digest = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(text));
     return [...new Uint8Array(digest)]
       .slice(0, 8)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
+  }
+
+  // First 16 hex chars of SHA-256, identical to the server's builder.
+  function hashHost(host) {
+    return sha16(String(host).toLowerCase().replace(/\.$/, ""));
+  }
+
+  // Exact-URL key: lowercased host + path + query — scheme, port and fragment
+  // dropped, byte-identical to the server's hashUrl (parity pinned by tests).
+  function hashUrl(url) {
+    let parsed;
+    try {
+      parsed = new URL(url);
+    } catch (_) {
+      return Promise.resolve(null);
+    }
+    const key = parsed.hostname.toLowerCase().replace(/\.$/, "") + parsed.pathname + parsed.search;
+    return sha16(key);
   }
 
   function buildIndex(entries) {
@@ -75,16 +91,54 @@
     return index;
   }
 
-  // {host, cat, seen} for the first (most specific) matching candidate, else null.
-  async function check(url, index) {
-    if (!index || index.size === 0) return null;
+  // Three tiers from one stored list (older lists simply lack soft/urls).
+  function buildIndexes(list) {
+    return {
+      wall: buildIndex(list && list.entries),
+      soft: buildIndex(list && list.soft),
+      urls: buildIndex(list && list.urls),
+    };
+  }
+
+  // Most-specific match wins: an exact dangerous link is a WALL even when its
+  // host is only soft-tier (the hacked-bakery hybrid); then wall hosts; then
+  // soft hosts. Returns {level, host, cat, seen} or null.
+  async function check(url, indexes) {
+    if (!indexes) return null;
     const host = canonicalHost(url);
     if (!host) return null;
+
+    if (indexes.urls && indexes.urls.size) {
+      const hit = indexes.urls.get(await hashUrl(url));
+      if (hit) return { level: "wall", host, cat: hit.cat, seen: hit.seen };
+    }
     for (const candidate of candidateHosts(host)) {
-      const hit = index.get(await hashHost(candidate));
-      if (hit) return { host: candidate, cat: hit.cat, seen: hit.seen };
+      const hash = await hashHost(candidate);
+      const wallHit = indexes.wall && indexes.wall.get(hash);
+      if (wallHit) return { level: "wall", host: candidate, cat: wallHit.cat, seen: wallHit.seen };
+      const softHit = indexes.soft && indexes.soft.get(hash);
+      if (softHit) return { level: "soft", host: candidate, cat: softHit.cat, seen: softHit.seen };
     }
     return null;
+  }
+
+  // Soft warnings nudge once per host per browser session — a heads-up, not a
+  // nag on every page of the site. Consume-on-first-read.
+  async function softAlreadyShown(ext, host) {
+    const store = bypassStore(ext);
+    let shown = [];
+    try {
+      ({ softNotifiedHosts: shown = [] } = await store.get("softNotifiedHosts"));
+    } catch (_) {
+      return false;
+    }
+    if (shown.includes(host)) return true;
+    try {
+      await store.set({ softNotifiedHosts: [...shown, host].slice(-200) });
+    } catch (_) {
+      /* worst case the user gets the heads-up twice */
+    }
+    return false;
   }
 
   // ── proceed-anyway bypass: one shot, short-lived ────────────
@@ -179,6 +233,8 @@
           etag: response.headers.get("etag") || null,
           fetchedAt: Date.now(),
           entries: body.entries,
+          soft: Array.isArray(body.soft) ? body.soft : [],
+          urls: Array.isArray(body.urls) ? body.urls : [],
         },
       });
     } catch (_) {
@@ -191,11 +247,14 @@
     canonicalHost,
     candidateHosts,
     hashHost,
+    hashUrl,
     buildIndex,
+    buildIndexes,
     check,
     grantBypass,
     peekBypass,
     takeBypass,
+    softAlreadyShown,
     listStale,
     refreshList,
   };

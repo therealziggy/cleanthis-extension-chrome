@@ -45,7 +45,7 @@ async function tryLaunch(browserPath, extDir) {
       // the local fixture server (local addresses are skipped by design).
       // e2e-redirector.example models the doorway case: flagged host that
       // 301s away instantly, so its URL never commits in the tab.
-      "--host-resolver-rules=MAP e2e-flagged.example 127.0.0.1, MAP e2e-redirector.example 127.0.0.1",
+      "--host-resolver-rules=MAP e2e-flagged.example 127.0.0.1, MAP e2e-redirector.example 127.0.0.1, MAP e2e-soft.example 127.0.0.1",
     ],
   });
 
