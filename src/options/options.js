@@ -17,7 +17,6 @@ const els = {
   enabled: document.getElementById("intercept-enabled"),
   flagged: document.getElementById("flagged-enabled"),
   flaggedStatus: document.getElementById("flagged-status"),
-  level: document.getElementById("level"),
   groups: document.getElementById("type-groups"),
   restore: document.getElementById("restore-exts"),
   quota: document.getElementById("quota"),
@@ -87,14 +86,12 @@ async function load() {
   const stored = await ext.storage.local.get([
     "interceptEnabled",
     "flaggedEnabled",
-    "level",
     "interceptExts",
     "quota_scan",
     "quota_upload",
   ]);
 
   els.enabled.checked = stored.interceptEnabled === true;
-  els.level.value = stored.level || "standard";
 
   // The toggle reflects reality: enabled AND the permission still held (it
   // can be revoked from the browser's own extension settings at any time).
@@ -163,8 +160,7 @@ els.flagged.addEventListener("change", async () => {
   }
 });
 
-els.level.addEventListener("change", () => {
-  ext.storage.local.set({ level: els.level.value });
-});
+// The cleaning level lives in the popup's settings view and on the clean-a-file
+// window (shared storage key "level") — deliberately not duplicated here.
 
 load();
