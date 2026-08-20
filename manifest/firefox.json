@@ -2,6 +2,12 @@
   "background": {
     "scripts": ["lib/api.js", "lib/intercept.js", "lib/filetypes.js", "lib/flagged.js", "background.js"]
   },
+  "action": {
+    "theme_icons": [
+      { "light": "icons/icon-16-dark.png", "dark": "icons/icon-16.png", "size": 16 },
+      { "light": "icons/icon-32-dark.png", "dark": "icons/icon-32.png", "size": 32 }
+    ]
+  },
   "browser_specific_settings": {
     "gecko": {
       "id": "extension@cleanthis.io",
