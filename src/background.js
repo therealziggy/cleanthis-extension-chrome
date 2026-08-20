@@ -124,13 +124,16 @@ async function notify(title, message, action) {
 }
 
 // The badge is the part that doesn't disappear: it says how many things are
-// still waiting for a decision, and the popup lists them.
+// still waiting for a decision, and the popup lists them. A file we could not
+// clean outranks everything — red "!", not a number; never both at once.
 async function refreshBadge() {
   try {
     const { [ACTIONS_KEY]: actions = {} } = await actionStore.get(ACTIONS_KEY);
-    const count = Object.keys(actions).length;
-    await ext.action.setBadgeText({ text: count ? String(count) : "" });
-    if (count) await ext.action.setBadgeBackgroundColor({ color: "#dc2626" });
+    const entries = Object.values(actions);
+    const failed = entries.some((a) => a && a.kind === "download-original");
+    const text = failed ? "!" : entries.length ? String(entries.length) : "";
+    await ext.action.setBadgeText({ text });
+    if (text) await ext.action.setBadgeBackgroundColor({ color: failed ? "#dc2626" : "#d97706" });
   } catch (_) {
     /* the badge is a convenience; never let it break the flow */
   }

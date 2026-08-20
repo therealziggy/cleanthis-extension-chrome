@@ -282,13 +282,53 @@ function record(name, ok, detail) {
     outlivesToast.survivedDismissal === true && outlivesToast.offerHasName === true
   );
   record(
-    "the badge counts what is waiting, and clears when it is dealt with",
-    outlivesToast.badgeAfterOffer === "1" && outlivesToast.badgeAfterUse === "",
+    // This offer is a failed clean (download-original), so the badge escalates
+    // to the red "!" tier rather than showing a count.
+    "the badge flags what is waiting, and clears when it is dealt with",
+    outlivesToast.badgeAfterOffer === "!" && outlivesToast.badgeAfterUse === "",
     `badge "${outlivesToast.badgeAfterOffer}" → "${outlivesToast.badgeAfterUse}"`
   );
   record(
     "the popup's row does the same thing the notification would",
     outlivesToast.started === "https://example.com/toast.pdf" && outlivesToast.clearedAfterUse === true
+  );
+
+  // Badge tiers: amber count for waiting decisions; a failed clean outranks
+  // the count with a red "!" — never both at once.
+  const badgeTiers = await sw.evaluate(async () => {
+    const store = chrome.storage.session || chrome.storage.local;
+    const read = async () => ({
+      text: await chrome.action.getBadgeText({}),
+      color: Array.from(await chrome.action.getBadgeBackgroundColor({})),
+    });
+    const out = {};
+    await store.set({ pendingActions: {} });
+    await self.refreshBadge();
+    out.empty = await read();
+    await store.set({ pendingActions: {
+      a: { kind: "download-cleaned", url: "u1" },
+      b: { kind: "download-cleaned", url: "u2" },
+    } });
+    await self.refreshBadge();
+    out.pending = await read();
+    await store.set({ pendingActions: {
+      a: { kind: "download-cleaned", url: "u1" },
+      b: { kind: "download-original", url: "u2" },
+    } });
+    await self.refreshBadge();
+    out.failed = await read();
+    return out;
+  });
+  record("badge: an empty list clears it", badgeTiers.empty.text === "");
+  record(
+    "badge: pending-only shows an amber count",
+    badgeTiers.pending.text === "2" && badgeTiers.pending.color[0] === 217,
+    JSON.stringify(badgeTiers.pending)
+  );
+  record(
+    "badge: a failed clean shows a red !",
+    badgeTiers.failed.text === "!" && badgeTiers.failed.color[0] === 220,
+    JSON.stringify(badgeTiers.failed)
   );
 
   await cleanup();
