@@ -23,6 +23,20 @@
   --ct-btn-bg: #2a7e80;
   --ct-btn-bg-hover: #1f6466;
   --ct-btn-text: #ffffff;
+  /* Redesign additions (v0.6). The -on-dark trio carries the light value here
+     and brightens in the dark block — #16a34a/#dc2626 don't hold AA on #14232c. */
+  --ct-ring-track: #eef2f3;
+  --ct-green-tint: #dcfce7;
+  --ct-amber-tint: #fef3c7;
+  --ct-amber-soft: #fffbeb;
+  --ct-amber-line: #fde68a;
+  --ct-amber-ink: #b45309;
+  --ct-red-tint: #fee2e2;
+  --ct-dash: #b6cdd0;
+  --ct-faint: #94a3b8;
+  --ct-green-on-dark: #16a34a;
+  --ct-red-on-dark: #dc2626;
+  --ct-red-body-on-dark: #64748b;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -42,6 +56,18 @@
     --ct-btn-bg: #4db8aa;
     --ct-btn-bg-hover: #67c6b9;
     --ct-btn-text: #0d1f1c;
+    --ct-ring-track: #22333d;
+    --ct-green-tint: #14372a;
+    --ct-amber-tint: #3a2c12;
+    --ct-amber-soft: #2a2317;
+    --ct-amber-line: #5c451c;
+    --ct-amber-ink: #e0a33f;
+    --ct-red-tint: #3f1d1d;
+    --ct-dash: #3c5460;
+    --ct-faint: #6b8391;
+    --ct-green-on-dark: #4ade80;
+    --ct-red-on-dark: #f87171;
+    --ct-red-body-on-dark: #f8b4b4;
   }
 }
 
@@ -156,4 +182,142 @@ select {
   color: var(--ct-muted);
   font-size: 11px;
   text-align: center;
+}
+
+/* ── redesign primitives, shared by the popup and the clean window ── */
+
+/* Segmented control (cleaning level). */
+.ct-seg {
+  display: flex;
+  gap: 4px;
+  padding: 3px;
+  background: var(--ct-card);
+  border: 1px solid var(--ct-line);
+  border-radius: 9px;
+}
+
+.ct-seg button {
+  flex: 1;
+  padding: 7px 4px;
+  font: inherit;
+  font-size: 11.5px;
+  font-weight: 400;
+  color: var(--ct-muted);
+  background: transparent;
+  border: 0;
+  border-radius: 6px;
+  cursor: pointer;
+}
+
+.ct-seg button:hover:not([aria-pressed="true"]) { background: transparent; color: var(--ct-text); }
+
+.ct-seg button[aria-pressed="true"] {
+  font-weight: 600;
+  color: var(--ct-btn-text);
+  background: var(--ct-btn-bg);
+}
+
+/* Progress ring. The dash values are driven from JS (2πr = 345.6 at r=55). */
+.ct-ring { position: relative; width: 132px; height: 132px; }
+
+.ct-ring svg { display: block; transform: rotate(-90deg); }
+
+.ct-ring .track { stroke: var(--ct-ring-track); }
+
+.ct-ring .bar {
+  stroke: var(--ct-btn-bg);
+  stroke-linecap: round;
+  transition: stroke-dashoffset 0.18s linear;
+}
+
+.ct-ring-label {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  text-align: center;
+}
+
+.ct-ring-label .pct {
+  font-weight: 700;
+  font-size: 30px;
+  line-height: 1;
+  letter-spacing: -0.03em;
+  font-variant-numeric: tabular-nums;
+}
+
+.ct-ring-label .sub { margin-top: 3px; font-size: 11.5px; color: var(--ct-muted); }
+
+/* Step checklist beside/under the ring. */
+.ct-checklist {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 9px;
+  font-size: 12.5px;
+}
+
+.ct-checklist li { display: flex; align-items: center; gap: 10px; }
+
+.ct-checklist .mark {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  border: 2px solid var(--ct-line);
+  box-sizing: border-box;
+  color: #fff;
+  font-weight: 700;
+  font-size: 11px;
+  line-height: 14px;
+  text-align: center;
+}
+
+.ct-checklist li.done .mark { background: var(--ct-green); border-color: var(--ct-green); }
+.ct-checklist li.done { color: var(--ct-muted); }
+.ct-checklist li.active .mark { border-color: var(--ct-btn-bg); }
+.ct-checklist li.active { color: var(--ct-text); font-weight: 600; }
+.ct-checklist li.queued { color: var(--ct-faint); }
+.ct-checklist li.queued .mark { border-color: var(--ct-line); }
+
+/* Verdict / status icon tile. */
+.ct-tile {
+  flex: none;
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.ct-tile.green { background: var(--ct-green-tint); color: var(--ct-green); }
+.ct-tile.amber { background: var(--ct-amber-tint); color: var(--ct-amber); }
+.ct-tile.red { background: var(--ct-red-tint); color: var(--ct-red); }
+.ct-tile.gray { background: var(--ct-card); color: var(--ct-gray); }
+
+/* Persistent footer strip. */
+.ct-foot {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 16px;
+  border-top: 1px solid var(--ct-line);
+  background: var(--ct-card);
+  font-size: 11px;
+  color: var(--ct-muted);
+}
+
+@media (prefers-color-scheme: dark) {
+  .ct-checklist li.done .mark {
+    background: var(--ct-green-on-dark);
+    border-color: var(--ct-green-on-dark);
+    color: #0d1f1c;
+  }
+  .ct-tile.green { color: var(--ct-green-on-dark); }
+  .ct-tile.red { color: var(--ct-red-on-dark); }
 }
