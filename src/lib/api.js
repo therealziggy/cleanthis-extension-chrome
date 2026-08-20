@@ -99,7 +99,7 @@
     }
   }
 
-  async function request(path, { method = "GET", headers = {}, body, bucket } = {}) {
+  async function request(path, { method = "GET", headers = {}, body, bucket, signal } = {}) {
     await syncCooldown();
     const waitMs = cooldownRemaining();
     if (waitMs > 0) {
@@ -111,8 +111,12 @@
 
     let response;
     try {
-      response = await fetch(`${api.baseUrl}${path}`, { method, headers, body });
+      response = await fetch(`${api.baseUrl}${path}`, { method, headers, body, signal });
     } catch (err) {
+      // A deliberate cancel is not a network problem — and must not look like one.
+      if (err && err.name === "AbortError") {
+        throw new ApiError("Cancelled.", { code: "aborted" });
+      }
       throw new ApiError("Couldn't reach cleanthis.io. Check your connection and try again.", {
         code: "network",
       });
@@ -164,8 +168,8 @@
     return payload;
   }
 
-  async function getFormToken(purpose) {
-    const data = await request(`/api/form-token?purpose=${encodeURIComponent(purpose)}`);
+  async function getFormToken(purpose, { signal } = {}) {
+    const data = await request(`/api/form-token?purpose=${encodeURIComponent(purpose)}`, { signal });
     if (!data || !data.token) throw new ApiError("Couldn't start a secure request. Please try again.");
     return data.token;
   }
@@ -176,13 +180,14 @@
     return { "X-Form-Token": token, "X-Form-Hp": "", ...extra };
   }
 
-  async function scanUrl(url, tier = "standard") {
-    const token = await getFormToken("scan-webpage");
+  async function scanUrl(url, tier = "standard", { signal } = {}) {
+    const token = await getFormToken("scan-webpage", { signal });
     return request("/api/scan-url", {
       method: "POST",
       headers: formHeaders(token, { "Content-Type": "application/json" }),
       body: JSON.stringify({ url, tier }),
       bucket: BUCKETS.scan,
+      signal,
     });
   }
 
