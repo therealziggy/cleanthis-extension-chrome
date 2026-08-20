@@ -1,13 +1,16 @@
-// CleanThis — the "Clean a file" page.
+// CleanThis — the "Clean a file" page (v0.6 redesign).
 //
-// This lives in a real tab on purpose: a popup dies the moment the native
+// This lives in its own window on purpose: a popup dies the moment the native
 // file dialog (or anything else) takes focus, killing the upload before it
-// starts. A tab survives focus changes, so picking a file here always works.
+// starts. A real window survives focus changes, so picking a file here always
+// works.
 //
-// The clean flow itself is the popup's v1 flow, moved verbatim: a cleaning
-// job can still outlast this page (the tab can be closed mid-clean), so the
-// page opens a port to the background script and hands the job over if it is
-// still running when the page goes away.
+// The clean flow itself is unchanged underneath: a cleaning job can outlast
+// this page (the window can be closed mid-clean), so the page opens a port to
+// the background script and hands the job over if it is still running when
+// the page goes away. What changed is the rendering: a progress ring and
+// checklist while it runs, a report card when it's done, tone blocks when it
+// isn't.
 
 "use strict";
 
@@ -22,17 +25,11 @@ const els = {
   fileInput: document.getElementById("file-input"),
   cleanResult: document.getElementById("clean-result"),
   quota: document.getElementById("quota"),
+  footStatus: document.getElementById("foot-status"),
   settings: document.getElementById("settings-link"),
 };
 
 // ── small helpers ─────────────────────────────────────────────
-
-function show(el, { html, error = false } = {}) {
-  el.hidden = false;
-  el.classList.toggle("error", error);
-  el.textContent = "";
-  if (html) el.append(html);
-}
 
 function text(tag, className, value) {
   const node = document.createElement(tag);
@@ -41,9 +38,28 @@ function text(tag, className, value) {
   return node;
 }
 
-function busy(isBusy) {
-  els.drop.classList.toggle("busy", isBusy);
-  els.fileInput.disabled = isBusy;
+function show(html) {
+  els.cleanResult.hidden = false;
+  els.cleanResult.textContent = "";
+  if (html) els.cleanResult.append(html);
+}
+
+// The drop/level screen and the working screens swap, like the design's
+// separate views — "working" hides the intake UI while a job is on screen.
+function working(isWorking) {
+  document.body.classList.toggle("working", isWorking);
+  els.fileInput.disabled = isWorking;
+}
+
+function fmtSize(bytes) {
+  if (!Number.isFinite(bytes)) return "";
+  if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+  if (bytes >= 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${bytes} B`;
+}
+
+function levelLabel(level) {
+  return level.charAt(0).toUpperCase() + level.slice(1);
 }
 
 // Turns an ApiError into something a person can act on.
@@ -61,8 +77,8 @@ async function refreshQuota() {
   try {
     const stored = await ext.storage.local.get(["quota_scan", "quota_upload"]);
     const parts = [];
-    if (stored.quota_scan) parts.push(`${stored.quota_scan.remaining} scans left today`);
-    if (stored.quota_upload) parts.push(`${stored.quota_upload.remaining} files left today`);
+    if (stored.quota_scan) parts.push(`${stored.quota_scan.remaining} scans left`);
+    if (stored.quota_upload) parts.push(`${stored.quota_upload.remaining} files left`);
     els.quota.textContent = parts.join(" · ");
   } catch (_) {
     /* the quota line is informational only */
@@ -71,12 +87,21 @@ async function refreshQuota() {
 
 // ── level preference (shared storage key with interception) ───
 
-ext.storage.local.get(["level"]).then(({ level }) => {
-  if (level) els.level.value = level;
-});
+let currentLevel = "standard";
 
-els.level.addEventListener("change", () => {
-  ext.storage.local.set({ level: els.level.value });
+function setLevel(level, persist) {
+  currentLevel = level;
+  for (const button of els.level.querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.level === level));
+  }
+  if (persist) ext.storage.local.set({ level });
+}
+
+ext.storage.local.get(["level"]).then(({ level }) => setLevel(level || "standard", false));
+
+els.level.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-level]");
+  if (button) setLevel(button.dataset.level, true);
 });
 
 els.settings.addEventListener("click", (event) => {
@@ -84,11 +109,117 @@ els.settings.addEventListener("click", (event) => {
   ext.runtime.openOptionsPage();
 });
 
+// ── progress ring + checklist ─────────────────────────────────
+// No progress events exist for an upload-and-rebuild, so the ring is a
+// bounded estimate that eases toward 90% and holds; real milestones (upload
+// done, job picked up) push a floor underneath it so it never slides back.
+
+const RING_CIRCUMFERENCE = 345.6; // 2π × r55
+const STEPS = [
+  "Uploaded over TLS",
+  "Scanned — no virus signatures",
+  "Stripping macros & metadata",
+  "Rebuilding from safe content",
+];
+
+function buildRing() {
+  const root = text("div", "ct-ring");
+  root.innerHTML =
+    '<svg viewBox="0 0 132 132" width="132" height="132" aria-hidden="true">' +
+    '<circle class="track" cx="66" cy="66" r="55" stroke-width="11" fill="none"></circle>' +
+    '<circle class="bar" cx="66" cy="66" r="55" stroke-width="11" fill="none" ' +
+    'stroke-dasharray="345.6" stroke-dashoffset="345.6"></circle></svg>';
+  const label = text("div", "ct-ring-label");
+  const pct = text("span", "pct", "0%");
+  label.append(pct, text("span", "sub", `${levelLabel(currentLevel)} clean`));
+  root.append(label);
+  return { root, bar: root.querySelector(".bar"), pct };
+}
+
+function buildChecklist() {
+  const list = text("ul", "ct-checklist");
+  for (const step of STEPS) {
+    const row = text("li", "queued");
+    row.append(text("span", "mark"), text("span", null, step));
+    list.append(row);
+  }
+  return list;
+}
+
+function makeProgress(ring, checklist) {
+  let floor = 0;
+  let current = 0;
+  const startedAt = Date.now();
+
+  function paint(pct) {
+    current = pct;
+    ring.pct.textContent = `${Math.round(pct)}%`;
+    ring.bar.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - pct / 100));
+    checklist.querySelectorAll("li").forEach((li, i) => {
+      const state = pct >= (i + 1) * 25 ? "done" : pct >= i * 25 ? "active" : "queued";
+      li.className = state;
+      li.querySelector(".mark").textContent = state === "done" ? "✓" : "";
+    });
+  }
+
+  const timer = setInterval(() => {
+    const t = (Date.now() - startedAt) / 20000;
+    paint(Math.max(floor, Math.min(90, 90 * (1 - Math.exp(-2.2 * t)))));
+  }, 150);
+
+  return {
+    setFloor(value) {
+      floor = Math.max(floor, value);
+      if (current < floor) paint(floor);
+    },
+    async finish() {
+      clearInterval(timer);
+      paint(100);
+      await new Promise((resolve) => setTimeout(resolve, 220));
+    },
+    stop() {
+      clearInterval(timer);
+    },
+  };
+}
+
+// ── state renderers ───────────────────────────────────────────
+
+function renderCleaning(file) {
+  const wrap = document.createDocumentFragment();
+  const row = text("div", "clean-row");
+  const ring = buildRing();
+  const checklist = buildChecklist();
+  row.append(ring.root);
+
+  const side = text("div", "clean-side");
+  side.append(text("h2", "state-title", "Taking it apart, carefully."));
+  side.append(text("p", "state-sub", `${file.name} · ${fmtSize(file.size)}`));
+  side.append(checklist);
+  row.append(side);
+  wrap.append(row);
+
+  const reassure = text("div", "block");
+  reassure.append(text("p", "block-title", "Close this window if you like"));
+  reassure.append(text("p", "block-body",
+    "The job carries on without it — you'll get a notification, and it'll be waiting in the popup."));
+  wrap.append(reassure);
+
+  show(wrap);
+  return makeProgress(ring, checklist);
+}
+
+function toneBlock(tone, title, body) {
+  const block = text("div", `block ${tone}`.trim());
+  block.append(text("p", "block-title", title));
+  if (body) block.append(text("p", "block-body", body));
+  return block;
+}
+
 // ── the sanitization report ───────────────────────────────────
 // The server's completed-job response has always carried the same report the
 // website shows (what was stripped, what the pre-scan found, how strong the
-// clean was); until v0.5.3 the extension ignored it. Rendered compactly:
-// the cleaning-strength line first, then up to MAX_REPORT_ITEMS changes.
+// clean was); rendered compactly under a "What was done" rule.
 
 const MAX_REPORT_ITEMS = 8;
 
@@ -105,7 +236,9 @@ function renderReport(report) {
   const rest = report.changes.filter((c) => c && c !== strength && c.label);
   const list = text("ul", "report-list");
   for (const change of rest.slice(0, MAX_REPORT_ITEMS)) {
-    const row = text("li", change.danger ? "danger" : null, change.label);
+    const row = text("li", change.danger ? "danger" : null);
+    row.append(text("span", "row-glyph", change.danger ? "✕" : "•"));
+    row.append(text("span", null, change.label));
     list.append(row);
   }
   if (list.childElementCount) box.append(list);
@@ -117,18 +250,23 @@ function renderReport(report) {
   return box.childElementCount > 1 ? box : null;
 }
 
-// ── clean flow (moved verbatim from the v1 popup) ─────────────
+// ── clean flow ────────────────────────────────────────────────
 
 async function startClean(file) {
   if (!file) return;
 
   if (file.size > MAX_UPLOAD_BYTES) {
-    show(els.cleanResult, { html: text("span", null, "That file is over the 50 MB limit."), error: true });
+    working(true);
+    const wrap = document.createDocumentFragment();
+    wrap.append(toneBlock("hard", "That one's too big.",
+      `50 MB is the ceiling, and ${file.name} is ${fmtSize(file.size)}. Nothing was uploaded.`));
+    wrap.append(anotherButton("Try a smaller file"));
+    show(wrap);
     return;
   }
 
-  busy(true);
-  show(els.cleanResult, { html: text("span", "progress", `Uploading ${file.name}…`) });
+  working(true);
+  const progress = renderCleaning(file);
 
   // Hand the job to the background script if this page closes mid-flight.
   // The port deliberately stays OPEN while an unsaved result is on screen:
@@ -154,76 +292,60 @@ async function startClean(file) {
   }
 
   try {
-    const job = await api.sanitizeFile(file, els.level.value);
+    const job = await api.sanitizeFile(file, currentLevel);
     port.postMessage({ jobId: job.jobId, downloadToken: job.downloadToken, name: file.name });
     handedOver = true;
+    progress.setFloor(30); // uploaded
 
-    show(els.cleanResult, { html: text("span", "progress", "Cleaning…") });
     const finished = await api.waitForJob(job.jobId, job.downloadToken, {
       onTick: (snapshot) => {
-        if (snapshot.state === "queued") show(els.cleanResult, { html: text("span", "progress", "Waiting for a slot…") });
+        els.footStatus.textContent = snapshot.state === "queued" ? " · Waiting for a slot…" : "";
+        if (snapshot.state === "processing") progress.setFloor(45);
       },
     });
+    els.footStatus.textContent = "";
 
     if (finished.state === "completed") {
-      const wrap = document.createDocumentFragment();
-      wrap.append(text("p", null, `${finished.downloadName || file.name} is ready.`));
-      const report = renderReport(finished.report);
-      if (report) wrap.append(report);
-      const save = document.createElement("button");
-      save.textContent = "Save cleaned file";
-      const note = text("p", "driver");
-      save.addEventListener("click", async () => {
-        // Download links are signed and short-lived, so ask for a fresh one
-        // at click time rather than reusing the one from completion.
-        save.disabled = true;
-        note.textContent = "";
-        try {
-          const fresh = await api.getJob(job.jobId, job.downloadToken);
-          const url = fresh && fresh.state === "completed" ? api.resolveUrl(fresh.downloadUrl) : null;
-          if (!url) throw new api.ApiError("Cleaned files are only kept for a few minutes. Clean it again for a fresh copy.");
-          await ext.downloads.download({ url, filename: fresh.downloadName || undefined });
-          // Only now is the file genuinely the user's; until this point the
-          // port stays open so a closed page hands the job to the background.
-          note.textContent = "Saved.";
-          settle();
-        } catch (err) {
-          // Leave the button usable — the job is valid for a few more minutes
-          // and a second click often just works.
-          note.textContent = humanize(err);
-        }
-        save.disabled = false;
-      });
-      wrap.append(save);
-      wrap.append(note);
-      show(els.cleanResult, { html: wrap });
+      await progress.finish();
+      renderDone(finished, file, job, settle);
     } else if (finished.state === "cancelled") {
+      progress.stop();
       settle();
-      show(els.cleanResult, { html: text("span", null, "That job was cancelled."), error: true });
+      const wrap = document.createDocumentFragment();
+      wrap.append(toneBlock("", "That job was cancelled.", "Nothing was kept on our side."));
+      wrap.append(anotherButton("Clean another"));
+      show(wrap);
     } else {
       // The failure is on screen already; no need for the background worker to
       // repeat it as a notification.
+      progress.stop();
       settle();
-      show(els.cleanResult, {
-        html: text("span", null, finished.error || "Cleaning failed. Please try again."),
-        error: true,
-      });
+      const wrap = document.createDocumentFragment();
+      wrap.append(toneBlock("", "Cleaning failed.",
+        `${finished.error || "The server couldn't process this one."} Your upload was erased either way.`));
+      wrap.append(anotherButton("Clean another"));
+      show(wrap);
     }
   } catch (err) {
+    progress.stop();
+    els.footStatus.textContent = "";
+    const wrap = document.createDocumentFragment();
     if (handedOver) {
       // Disconnecting WITHOUT done hands the job to the background watcher;
       // say so rather than implying the job died.
-      show(els.cleanResult, {
-        html: text("span", null, `${humanize(err)} You'll get a notification if it finishes.`),
-        error: true,
-      });
+      wrap.append(toneBlock("amber", "Lost the connection mid-clean.",
+        "The job is still running on our side — you'll get a notification when it lands, and it'll be waiting in the popup."));
+      wrap.append(anotherButton("Clean another"));
+      show(wrap);
       try {
         port.disconnect();
       } catch (_) {
         /* already gone */
       }
     } else {
-      show(els.cleanResult, { html: text("span", null, humanize(err)), error: true });
+      wrap.append(toneBlock("hard", "That didn't work.", humanize(err)));
+      wrap.append(anotherButton("Try again"));
+      show(wrap);
       try {
         port.disconnect();
       } catch (_) {
@@ -231,9 +353,80 @@ async function startClean(file) {
       }
     }
   } finally {
-    busy(false);
     refreshQuota();
   }
+}
+
+function resetToIdle() {
+  els.cleanResult.hidden = true;
+  els.cleanResult.textContent = "";
+  els.fileInput.value = "";
+  working(false);
+}
+
+function anotherButton(label) {
+  const row = text("div", "done-actions");
+  const button = text("button", "secondary", label);
+  button.type = "button";
+  button.addEventListener("click", resetToIdle);
+  row.append(button);
+  return row;
+}
+
+function renderDone(finished, file, job, settle) {
+  const wrap = document.createDocumentFragment();
+
+  const head = text("div", "done-head");
+  const tile = text("div", "ct-tile green big");
+  tile.innerHTML =
+    '<svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" ' +
+    'stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>';
+  head.append(tile);
+  const headText = text("div", "done-headtext");
+  headText.append(text("h2", "state-title", "Scrubbed. All yours."));
+  headText.append(text("p", "state-sub",
+    `${finished.downloadName || file.name} · ${levelLabel(currentLevel)} · ${fmtSize(file.size)}`));
+  head.append(headText);
+  wrap.append(head);
+
+  const report = renderReport(finished.report);
+  if (report) wrap.append(report);
+
+  const actions = text("div", "done-actions");
+  const save = text("button", null, "Save cleaned file");
+  save.type = "button";
+  const note = text("span", "driver");
+  save.addEventListener("click", async () => {
+    // Download links are signed and short-lived, so ask for a fresh one
+    // at click time rather than reusing the one from completion.
+    save.disabled = true;
+    note.textContent = "";
+    try {
+      const fresh = await api.getJob(job.jobId, job.downloadToken);
+      const url = fresh && fresh.state === "completed" ? api.resolveUrl(fresh.downloadUrl) : null;
+      if (!url) throw new api.ApiError("Cleaned files are only kept for a few minutes. Clean it again for a fresh copy.");
+      await ext.downloads.download({ url, filename: fresh.downloadName || undefined });
+      // Only now is the file genuinely the user's; until this point the
+      // port stays open so a closed page hands the job to the background.
+      note.textContent = "Saved.";
+      note.classList.add("ok");
+      settle();
+    } catch (err) {
+      // Leave the button usable — the job is valid for a few more minutes
+      // and a second click often just works.
+      note.classList.remove("ok");
+      note.textContent = humanize(err);
+    }
+    save.disabled = false;
+  });
+
+  const another = text("button", "secondary", "Clean another");
+  another.type = "button";
+  another.addEventListener("click", resetToIdle);
+
+  actions.append(save, another, note);
+  wrap.append(actions);
+  show(wrap);
 }
 
 // ── picker + drag-and-drop share startClean ───────────────────

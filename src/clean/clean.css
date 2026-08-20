@@ -1,16 +1,55 @@
-/* Clean-a-file page layout. Shared look lives in ../lib/ui.css. */
+/* Clean-a-file window layout (v0.6 redesign). Shared look lives in
+   ../lib/ui.css. The OS draws the window's own title bar — nothing fake here. */
+
+body {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
 
 main {
-  max-width: 640px;
+  flex: 1;
+  width: 100%;
+  max-width: 560px;
   margin: 0 auto;
-  padding: 28px 20px;
+  padding: 22px 24px 20px;
 }
+
+/* ── brand row ─────────────────────────────────────────────── */
+
+.brand-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin-bottom: 12px;
+}
+
+.brand-row .mark { color: var(--ct-btn-bg); display: block; }
+
+.brand-row .word {
+  flex: 1;
+  font-size: 16px;
+  font-weight: 600;
+  color: var(--ct-ink);
+  letter-spacing: -0.01em;
+}
+
+.brand-row .word em { font-style: italic; }
+
+.brand-row .surface { font-weight: 500; font-size: 13px; color: var(--ct-muted); }
+
+.brand-row a { display: flex; color: var(--ct-muted); }
+
+.brand-row a:hover { color: var(--ct-text); }
 
 .intro {
   margin: 0 0 16px;
   color: var(--ct-muted);
   font-size: 13px;
+  line-height: 1.5;
 }
+
+/* ── drop zone + level ─────────────────────────────────────── */
 
 .drop {
   display: flex;
@@ -18,10 +57,12 @@ main {
   align-items: center;
   justify-content: center;
   gap: 4px;
-  min-height: 130px;
+  min-height: 150px;
   margin-bottom: 16px;
-  border: 2px dashed var(--ct-line);
+  border: 2px dashed var(--ct-dash);
   border-radius: 12px;
+  background: var(--ct-card);
+  color: var(--ct-btn-bg);
   cursor: pointer;
   user-select: none;
   transition: border-color 120ms ease, background-color 120ms ease;
@@ -30,17 +71,13 @@ main {
 .drop:hover,
 .drop:focus-visible {
   border-color: var(--ct-primary);
+  background: var(--ct-accent-tint);
   outline: none;
 }
 
 .drop.over {
-  border-color: var(--ct-accent);
+  border-color: var(--ct-primary);
   background: var(--ct-accent-tint);
-}
-
-.drop.busy {
-  pointer-events: none;
-  opacity: 0.6;
 }
 
 .drop-title {
@@ -54,14 +91,79 @@ main {
   color: var(--ct-muted);
 }
 
-.report {
-  margin: 10px 0 12px;
-  padding-top: 10px;
-  border-top: 1px solid var(--ct-line);
+.level-field { max-width: 420px; }
+
+.level-title { margin: 0 0 6px; font-weight: 600; font-size: 13px; }
+
+.level-help { margin: 6px 0 0; font-size: 11.5px; color: var(--ct-muted); line-height: 1.45; }
+
+/* While a job (or its outcome) is on screen, the intake UI steps aside —
+   the design's idle and working screens are separate views of one window. */
+.working .intro,
+.working .drop,
+.working .level-field { display: none; }
+
+/* ── working / result area ─────────────────────────────────── */
+
+.result-area { display: flex; flex-direction: column; gap: 14px; }
+
+.clean-row {
+  display: flex;
+  align-items: center;
+  gap: 22px;
+  padding-top: 8px;
 }
 
+.clean-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+
+.state-title {
+  margin: 0;
+  font-size: 19px;
+  font-weight: 600;
+  line-height: 1.2;
+  letter-spacing: -0.02em;
+}
+
+.state-sub {
+  margin: 0;
+  font-size: 12px;
+  color: var(--ct-muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* tone blocks (reassurance, failures) */
+
+.block {
+  padding: 12px 13px;
+  border: 1px solid var(--ct-line);
+  border-radius: 9px;
+  background: var(--ct-card);
+}
+
+.block-title { margin: 0; font-size: 14px; font-weight: 600; line-height: 1.3; }
+
+.block-body { margin: 4px 0 0; font-size: 12px; color: var(--ct-muted); line-height: 1.45; }
+
+.block.hard { border-color: var(--ct-error-line); background: var(--ct-error-bg); }
+
+.block.hard .block-body { color: var(--ct-red-body-on-dark); }
+
+.block.amber { border-color: var(--ct-amber-line); background: var(--ct-amber-soft); }
+
+/* ── done state ────────────────────────────────────────────── */
+
+.done-head { display: flex; align-items: center; gap: 12px; }
+
+.ct-tile.big { width: 48px; height: 48px; }
+
+.done-headtext { min-width: 0; }
+
+.report { border-top: 1px solid var(--ct-line); padding-top: 12px; }
+
 .report-title {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
@@ -70,39 +172,57 @@ main {
 }
 
 .report-strength {
-  margin: 0 0 6px;
+  margin: 0 0 8px;
   font-weight: 600;
   color: var(--ct-ink);
 }
 
 .report-list {
   margin: 0;
-  padding-left: 18px;
+  padding: 0;
+  list-style: none;
+  display: flex;
+  flex-direction: column;
+  gap: 5px;
 }
 
 .report-list li {
-  margin: 2px 0;
+  display: flex;
+  gap: 8px;
   font-size: 13px;
+  line-height: 1.4;
 }
+
+.report-list .row-glyph { flex: none; color: var(--ct-muted); }
 
 .report-list li.danger { color: var(--ct-red); font-weight: 600; }
 
+.report-list li.danger .row-glyph { color: var(--ct-red); }
+
 .report-more,
 .report-summary {
-  margin: 6px 0 0;
+  margin: 8px 0 0;
   color: var(--ct-muted);
   font-size: 12px;
+  line-height: 1.45;
 }
 
-.field {
-  display: block;
-  max-width: 420px;
-  margin-bottom: 16px;
+.done-actions { display: flex; align-items: center; gap: 10px; }
+
+.done-actions .driver { font-size: 12.5px; color: var(--ct-muted); }
+
+.done-actions .driver.ok { font-weight: 600; color: var(--ct-green); }
+
+.done-actions button.secondary {
+  color: var(--ct-text);
+  background: var(--ct-card);
+  border: 1px solid var(--ct-line);
 }
 
-.field span {
-  display: block;
-  margin-bottom: 4px;
-  color: var(--ct-muted);
-  font-size: 12px;
+.done-actions button.secondary:hover:not(:disabled) {
+  background: var(--ct-accent-tint);
+  border-color: var(--ct-primary);
 }
+
+/* footer status ("Waiting for a slot…") rides next to the quota */
+#foot-status { white-space: pre; }

@@ -140,12 +140,75 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
   });
   await shootPopup("popup-error-quota");
 
-  // ── clean page (idle drop zone) ───────────────────────────
+  // ── clean window: idle, cleaning, done, failure — real code paths ──
   const clean = await context.newPage();
-  await clean.goto(`chrome-extension://${extensionId}/clean/clean.html`, { waitUntil: "load" });
   await clean.setViewportSize({ width: 560, height: 660 });
-  await shoot(clean, "clean", "light");
-  await shoot(clean, "clean", "dark");
+
+  async function loadClean() {
+    await clean.goto(`chrome-extension://${extensionId}/clean/clean.html`, { waitUntil: "load" });
+  }
+
+  const DEMO_FILE = {
+    name: "q3-statement.docm",
+    mimeType: "application/vnd.ms-word.document.macroEnabled.12",
+    buffer: Buffer.from("demo bytes for the screenshot harness\n".repeat(32000)),
+  };
+
+  await loadClean();
+  await shoot(clean, "clean-idle", "light");
+  await shoot(clean, "clean-idle", "dark");
+
+  // cleaning — upload done, job never finishes, ring mid-flight
+  await loadClean();
+  await clean.evaluate(() => {
+    self.CleanThisApi.sanitizeFile = async () => ({ jobId: "demo", downloadToken: "demo" });
+    self.CleanThisApi.waitForJob = (id, token, { onTick }) => {
+      onTick({ state: "processing" });
+      return new Promise(() => {});
+    };
+  });
+  await clean.setInputFiles("#file-input", DEMO_FILE);
+  await clean.waitForSelector("#clean-result .clean-row");
+  await clean.waitForTimeout(2500);
+  await shoot(clean, "clean-cleaning", "light");
+  await shoot(clean, "clean-cleaning", "dark");
+
+  // done — completed job with a representative report
+  await loadClean();
+  await clean.evaluate(() => {
+    self.CleanThisApi.sanitizeFile = async () => ({ jobId: "demo", downloadToken: "demo" });
+    self.CleanThisApi.waitForJob = async () => ({
+      state: "completed",
+      downloadUrl: "/api/download/demo?sig=demo",
+      downloadName: "q3-statement.docx",
+      report: {
+        summary: "Layout, fonts and text are intact; the file opens in Word as normal.",
+        changes: [
+          { type: "cleaning_strength", label: "Full reconstruction — rebuilt from safe content only." },
+          { type: "macros", label: "3 VBA macros removed — one auto-opened and fetched a remote file", danger: true },
+          { type: "ole", label: "1 embedded OLE object removed" },
+          { type: "metadata", label: "18 metadata fields wiped — author, company, revision history, timestamps" },
+          { type: "links", label: "4 external link references stripped" },
+          { type: "fonts", label: "2 embedded fonts normalised" },
+        ],
+      },
+    });
+  });
+  await clean.setInputFiles("#file-input", DEMO_FILE);
+  await clean.waitForSelector("#clean-result .done-head");
+  await shoot(clean, "clean-done", "light");
+  await shoot(clean, "clean-done", "dark");
+
+  // failure — the server can't be reached at upload time
+  await loadClean();
+  await clean.evaluate(() => {
+    self.CleanThisApi.sanitizeFile = async () => {
+      throw new self.CleanThisApi.ApiError("Couldn't reach cleanthis.io. Check your connection.", { code: "network" });
+    };
+  });
+  await clean.setInputFiles("#file-input", DEMO_FILE);
+  await clean.waitForSelector("#clean-result .block.hard");
+  await shoot(clean, "clean-failure", "light");
 
   // ── options ───────────────────────────────────────────────
   const options = await context.newPage();
