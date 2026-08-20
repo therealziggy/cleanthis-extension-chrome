@@ -160,6 +160,34 @@ test("a network failure is reported as a network error", async () => {
   });
 });
 
+// ── cancellation ──────────────────────────────────────────────
+
+test("scanUrl aborts cleanly with code 'aborted' and starts no cooldown", async () => {
+  calls = [];
+  const controller = new AbortController();
+  global.fetch = (url, options = {}) =>
+    new Promise((resolve, reject) => {
+      calls.push({ url, options });
+      if (/form-token/.test(String(url))) {
+        resolve(jsonResponse({ token: "tok-123", ttl: 300 }));
+        return;
+      }
+      // The scan POST hangs until the caller aborts it.
+      options.signal.addEventListener("abort", () => {
+        reject(Object.assign(new Error("The operation was aborted."), { name: "AbortError" }));
+      });
+    });
+
+  const scan = api.scanUrl("https://example.com", "standard", { signal: controller.signal });
+  setTimeout(() => controller.abort(), 10);
+
+  await assert.rejects(scan, (err) => {
+    assert.equal(err.code, "aborted");
+    return true;
+  });
+  assert.equal(api._cooldownRemaining(), 0, "an abort must not start a cooldown");
+});
+
 // ── file + url sanitize ───────────────────────────────────────
 
 test("sanitizeFile posts multipart fields file and level", async () => {
