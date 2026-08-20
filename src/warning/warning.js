@@ -60,6 +60,11 @@ async function openCleanWindowFor(url) {
   ext.runtime.sendMessage({ type: "closeMe" }).catch(() => {});
 }
 
+// Flagged mode (the default) fills host + reason from the flagged list; the
+// document branch below overrides them with its own neutral copy.
+document.getElementById("host").textContent = host || "This page";
+document.getElementById("reason").textContent = REASONS[cat] || REASONS.other;
+
 // ── document mode: a neutral "this is a document" heads-up ────
 if (kind === "document") {
   document.getElementById("title").textContent = "Hold on — this link is a document.";

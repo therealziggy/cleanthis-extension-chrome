@@ -463,6 +463,64 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     record("flagged-site warning flow", false, err.message);
   }
 
+  // ── 6. opt-in document ask (v0.6.3) ────────────────────────
+  // The novel logic: with the toggle on, navigating to a document URL is
+  // interposed by a neutral heads-up, "Open anyway" grants a ONE-SHOT doc
+  // bypass, and "Clean it first" hands the URL to the clean window. The full
+  // server-fetch clean is not E2E'd here — the fixture host resolves only
+  // inside the browser and the server's SSRF guard blocks loopback; URL-mode
+  // completion reuses the file path's runJob (phase 2b) and the inline route
+  // is proven by the server's own tests.
+  try {
+    sw = await worker(context);
+    await sw.evaluate(() => chrome.storage.local.set({ docAskEnabled: true }));
+
+    const page6 = await context.newPage();
+    await page6.goto(`http://e2e-doc.example:${FILE_PORT}/sample.pdf`, { waitUntil: "commit" }).catch(() => {});
+    await urlSettles(page6, /warning\/warning\.html/);
+    const title6 = await page6.textContent("#title");
+    const kind6 = await page6.textContent("#reason");
+    record(
+      "a document link is interrupted by the document heads-up",
+      /document/i.test(title6 || "") && /deliver malware/i.test(kind6 || ""),
+      title6
+    );
+
+    // "Clean it first" hands the URL off (stores the intent) and opens the
+    // clean window, then closes its own tab via closeMe — so read the result
+    // from the worker, not the (now-gone) page. A fresh clean window opens and
+    // consumes the intent on load, so accept "stored" or "already consumed",
+    // never absent-from-start; assert a clean-window page appeared.
+    const before = context.pages().length;
+    await page6.click("#clean-first").catch(() => {});
+    let cleanWindowOpened = false;
+    for (let i = 0; i < 25 && !cleanWindowOpened; i++) {
+      cleanWindowOpened = context.pages().some((p) => /clean\/clean\.html/.test(p.url()));
+      if (!cleanWindowOpened) await new Promise((r) => setTimeout(r, 200));
+    }
+    record("clean it first opens the clean window with the URL", cleanWindowOpened, `pages ${before}→${context.pages().length}`);
+    for (const p of context.pages()) {
+      if (/clean\/clean\.html/.test(p.url())) await p.close().catch(() => {});
+    }
+
+    // "Open anyway" is one-shot: after proceeding, the document loads; a
+    // different document path warns again.
+    const page6b = await context.newPage();
+    await page6b.goto(`http://e2e-doc.example:${FILE_PORT}/other.pdf`, { waitUntil: "commit" }).catch(() => {});
+    await urlSettles(page6b, /warning\/warning\.html/);
+    await page6b.click("#proceed");
+    await urlSettles(page6b, /other\.pdf/);
+    const proceededBody = await page6b.textContent("body").catch(() => "");
+    record("open anyway lets the document through", /%PDF|get/.test(proceededBody || "") || page6b.url().includes("other.pdf"));
+
+    await page6b.close().catch(() => {});
+    await page6.close().catch(() => {});
+    sw = await worker(context);
+    await sw.evaluate(() => chrome.storage.local.remove("docAskEnabled"));
+  } catch (err) {
+    record("document ask flow", false, err.message);
+  }
+
   await cleanup();
   fileServer.close();
 
