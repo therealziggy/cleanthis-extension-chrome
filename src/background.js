@@ -620,8 +620,36 @@ function syncWebNavListener() {
 
 ext.tabs.onUpdated.addListener(onTabUpdated);
 syncWebNavListener();
+// The popup's flagged toggle records intent BEFORE calling
+// permissions.request(): the browser's grant prompt steals focus, which kills
+// the popup, so the toggle handler's continuation (the part that would write
+// flaggedEnabled) can die even though the user clicked Allow. When the grant
+// lands, onAdded fires HERE — and the background finishes the job the popup
+// started. Freshness-bounded so an abandoned prompt from days ago can't
+// activate anything; a grant with no recorded intent changes nothing.
+const FLAGGED_INTENT_MS = 5 * 60 * 1000;
+
+async function completeFlaggedIntent() {
+  try {
+    const { flaggedPendingAt } = await ext.storage.local.get("flaggedPendingAt");
+    if (flaggedPendingAt === undefined) return;
+    await ext.storage.local.remove("flaggedPendingAt");
+    if (Date.now() - flaggedPendingAt > FLAGGED_INTENT_MS) return;
+    const granted = await ext.permissions.contains({ permissions: ["tabs"] });
+    if (!granted) return;
+    await ext.storage.local.set({ flaggedEnabled: true });
+    syncWebNavListener();
+    await maybeRefreshFlaggedList();
+  } catch (_) {
+    /* the popup path or the next toggle still enables it */
+  }
+}
+
 if (ext.permissions && ext.permissions.onAdded) {
-  ext.permissions.onAdded.addListener(() => syncWebNavListener());
+  ext.permissions.onAdded.addListener(() => {
+    syncWebNavListener();
+    completeFlaggedIntent().catch(() => {});
+  });
 }
 maybeRefreshFlaggedList().catch(() => {});
 if (ext.runtime.onStartup) {

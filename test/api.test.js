@@ -188,6 +188,20 @@ test("scanUrl aborts cleanly with code 'aborted' and starts no cooldown", async 
   assert.equal(api._cooldownRemaining(), 0, "an abort must not start a cooldown");
 });
 
+test("scanUrl sends bypassCache only when asked", async () => {
+  stubFetch([tokenOk(), jsonResponse({ ok: true, verdict: "clean", scores: {} })]);
+  await api.scanUrl("https://example.com", "standard", { bypassCache: true });
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    url: "https://example.com",
+    tier: "standard",
+    bypassCache: true,
+  });
+
+  stubFetch([tokenOk(), jsonResponse({ ok: true, verdict: "clean", scores: {} })]);
+  await api.scanUrl("https://example.com", "standard");
+  assert.deepEqual(JSON.parse(calls[1].options.body), { url: "https://example.com", tier: "standard" });
+});
+
 // ── file + url sanitize ───────────────────────────────────────
 
 test("sanitizeFile posts multipart fields file and level", async () => {
