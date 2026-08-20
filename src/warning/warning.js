@@ -9,11 +9,13 @@
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 const flagged = self.CleanThisFlagged;
+const docs = self.CleanThisDocs;
 
 const params = new URLSearchParams(location.search);
 const target = params.get("to");
 const cat = params.get("cat") || "other";
 const seen = params.get("seen") || "";
+const kind = params.get("kind") || "flagged"; // "flagged" | "document"
 
 // The host shown (and bypassed) is derived from the target URL itself, never
 // from a separate parameter that could disagree with it.
@@ -35,8 +37,54 @@ const REASONS = {
   other: "Reported as harmful.",
 };
 
-document.getElementById("host").textContent = host || "This page";
-document.getElementById("reason").textContent = REASONS[cat] || REASONS.other;
+// Open the clean window for `target` in URL mode (the popup uses the identical
+// handoff: store the intent, send a message for an already-open window).
+async function openCleanWindowFor(url) {
+  const store = ext.storage.session || ext.storage.local;
+  try {
+    await store.set({ cleanUrlIntent: url });
+    ext.runtime.sendMessage({ type: "cleanUrl", url }).catch(() => {});
+  } catch (_) {
+    /* the window still opens and can be re-driven */
+  }
+  try {
+    await ext.windows.create({
+      url: ext.runtime.getURL("clean/clean.html"),
+      type: "popup",
+      width: 560,
+      height: 660,
+    });
+  } catch (_) {
+    ext.tabs.create({ url: ext.runtime.getURL("clean/clean.html") });
+  }
+  ext.runtime.sendMessage({ type: "closeMe" }).catch(() => {});
+}
+
+// ── document mode: a neutral "this is a document" heads-up ────
+if (kind === "document") {
+  document.getElementById("title").textContent = "Hold on — this link is a document.";
+  document.getElementById("host").textContent = host || "This link";
+  document.getElementById("reason").textContent =
+    "Documents are a common way to deliver malware — opening one can be enough to run it.";
+  document.getElementById("explain").textContent =
+    "You can open a rebuilt, safe copy instead — cleanthis.io fetches and reconstructs it, so nothing dangerous reaches your device.";
+  document.getElementById("badge").classList.add("neutral");
+  document.getElementById("proceed").textContent = "Open anyway";
+  document.getElementById("fineprint").textContent =
+    "Opening loads the original once. You can turn this off in settings.";
+}
+
+const cleanFirst = document.getElementById("clean-first");
+// "Clean it first" shows when the target is a cleanable document. In document
+// mode it always is; in flagged mode only when the blocked URL points at one.
+if (host && target && (kind === "document" || docs.isBlanketDocUrl(target))) {
+  cleanFirst.hidden = false;
+  cleanFirst.classList.toggle("primary", kind === "document");
+  cleanFirst.addEventListener("click", () => {
+    cleanFirst.disabled = true;
+    openCleanWindowFor(target);
+  });
+}
 
 if (/^\d{4}-\d{2}$/.test(seen)) {
   const [y, m] = seen.split("-").map(Number);
@@ -74,7 +122,13 @@ if (!host || !target) {
   proceed.addEventListener("click", async () => {
     proceed.disabled = true;
     try {
-      await flagged.grantBypass(ext, host);
+      // A document proceed grants a DOCUMENT bypass (via the background), never
+      // a flagged one — the two must stay separate.
+      if (kind === "document") {
+        await ext.runtime.sendMessage({ type: "docProceed", host });
+      } else {
+        await flagged.grantBypass(ext, host);
+      }
       location.href = target;
     } catch (_) {
       proceed.disabled = false;

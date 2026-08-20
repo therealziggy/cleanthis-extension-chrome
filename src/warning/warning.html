@@ -10,7 +10,7 @@
 <body>
   <main>
     <div class="card">
-      <div class="badge" aria-hidden="true">
+      <div class="badge" id="badge" aria-hidden="true">
         <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
              stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 4l9 16H3z"></path>
@@ -18,22 +18,23 @@
           <path d="M12 17.6h.01"></path>
         </svg>
       </div>
-      <h1>Hold on. This one's on the flagged list.</h1>
+      <h1 id="title">Hold on. This one's on the flagged list.</h1>
 
       <p class="host-line"><span id="host" class="host"></span></p>
       <p id="reason" class="reason"></p>
       <p id="seen" class="seen" hidden></p>
 
-      <p class="explain">
+      <p class="explain" id="explain">
         CleanThis threat intelligence has this site down as harmful. The page has not
         loaded, and nothing was sent anywhere — this check happened on your device.
       </p>
 
       <div class="choices">
         <button id="back" type="button">Go back</button>
+        <button id="clean-first" type="button" class="quiet" hidden>Clean it first</button>
         <button id="proceed" type="button" class="quiet">Proceed anyway</button>
       </div>
-      <p class="fineprint">
+      <p class="fineprint" id="fineprint">
         Proceeding loads the site once. You'll be warned again next time.
       </p>
     </div>
@@ -41,6 +42,8 @@
 
   <script src="../lib/api.js"></script>
   <script src="../lib/intercept.js"></script>
+  <script src="../lib/filetypes.js"></script>
+  <script src="../lib/docs.js"></script>
   <script src="../lib/flagged.js"></script>
   <script src="warning.js"></script>
 </body>

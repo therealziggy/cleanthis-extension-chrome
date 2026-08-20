@@ -13,8 +13,10 @@ Nothing is sent unless you ask for it, or you turn on download protection yourse
 | Action | What leaves your browser | When |
 |---|---|---|
 | **Clean a file** | The file you picked | Only when you pick it |
+| **Clean this file** (a document you're viewing) | The web address of the document | Only when you click *Clean this file* / *Clean it first* |
 | **Scan this page** | The web address of the active tab | Only when you click *Scan this page* |
 | **Download protection** | The web address of a matching download | Only while you have it switched on |
+| **Ask before opening document links** | Nothing | The check is on your device; the address only leaves if you then choose to clean it |
 
 Download protection is **off until you turn it on**. While it is on, the address of a
 download matching your chosen file types is sent to cleanthis.io so the service can

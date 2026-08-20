@@ -13,7 +13,7 @@
 // Chrome loads the shared libraries into the worker here; Firefox lists them
 // in the manifest instead (event pages have no importScripts).
 if (typeof importScripts === "function") {
-  importScripts("lib/api.js", "lib/intercept.js", "lib/filetypes.js", "lib/flagged.js");
+  importScripts("lib/api.js", "lib/intercept.js", "lib/filetypes.js", "lib/flagged.js", "lib/docs.js");
 }
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
@@ -478,6 +478,14 @@ ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
     ext.tabs.remove(sender.tab.id).catch(() => {});
     return undefined;
   }
+  if (message.type === "docProceed" && typeof message.host === "string") {
+    // Document ask "Open anyway": a one-shot doc bypass so the re-navigation
+    // isn't re-asked. Deliberately NOT a flagged bypass.
+    grantDocBypass(message.host)
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
   return undefined;
 });
 
@@ -562,6 +570,84 @@ async function flaggedVerdictFor(url, { consume }) {
   return hit;
 }
 
+// ── opt-in "ask before opening document links" (default OFF) ──
+// A SEPARATE bypass namespace from the flagged wall: a document proceed must
+// never bypass a flagged wall (different risk, different consent). Same
+// one-shot short-lived shape.
+const docs = self.CleanThisDocs;
+const DOC_BYPASS_KEY = "docBypass";
+const DOC_BYPASS_TTL_MS = 30 * 1000;
+const docBypassStore = ext.storage.session || ext.storage.local;
+
+async function grantDocBypass(host) {
+  try {
+    await docBypassStore.set({ [DOC_BYPASS_KEY]: { host, until: Date.now() + DOC_BYPASS_TTL_MS } });
+  } catch (_) {
+    /* the worst case is one extra ask */
+  }
+}
+
+async function takeDocBypass(host) {
+  let grant = null;
+  try {
+    ({ [DOC_BYPASS_KEY]: grant = null } = await docBypassStore.get(DOC_BYPASS_KEY));
+  } catch (_) {
+    return false;
+  }
+  if (!grant || grant.host !== host || grant.until < Date.now()) return false;
+  try {
+    await docBypassStore.remove(DOC_BYPASS_KEY);
+  } catch (_) {
+    /* consumed either way */
+  }
+  return true;
+}
+
+// Should we interrupt this navigation with the document ask? Only when the
+// toggle is on, the target is a document/archive on a public host, and no
+// fresh doc-bypass covers it. The flagged wall is checked FIRST by the caller
+// and outranks this.
+async function docAskFor(url, { consume }) {
+  let enabled = false;
+  try {
+    ({ docAskEnabled: enabled = false } = await ext.storage.local.get("docAskEnabled"));
+  } catch (_) {
+    return false;
+  }
+  if (enabled !== true) return false;
+  if (!docs.isBlanketDocUrl(url)) return false;
+  let host;
+  try {
+    host = new URL(url).hostname.toLowerCase();
+  } catch (_) {
+    return false;
+  }
+  if (host === new URL(api.baseUrl).hostname) return false;
+  const bypassed = consume ? await takeDocBypass(host) : await docBypassStoreHas(host);
+  return !bypassed;
+}
+
+// Peek (no consume) for the pre-navigation checkpoint — the commit-time check
+// is the single consumer, mirroring the flagged peek/take split.
+async function docBypassStoreHas(host) {
+  let grant = null;
+  try {
+    ({ [DOC_BYPASS_KEY]: grant = null } = await docBypassStore.get(DOC_BYPASS_KEY));
+  } catch (_) {
+    return false;
+  }
+  return !!grant && grant.host === host && grant.until >= Date.now();
+}
+
+async function warnDocTab(tabId, url, via) {
+  const params = new URLSearchParams({ to: url, kind: "document", via });
+  try {
+    await ext.tabs.update(tabId, { url: `${ext.runtime.getURL("warning/warning.html")}?${params}` });
+  } catch (_) {
+    /* tab already gone */
+  }
+}
+
 // The hybrid's soft tier (2026-08-20): pages on a compromised-but-legitimate
 // site get a one-time heads-up notification, never a wall.
 async function softHeadsUp(hit) {
@@ -589,9 +675,15 @@ async function warnTab(tabId, url, hit, via) {
 async function onTabUpdated(tabId, changeInfo) {
   if (!changeInfo || !changeInfo.url) return;
   const hit = await flaggedVerdictFor(changeInfo.url, { consume: true });
-  if (!hit) return;
-  if (hit.level === "soft") return softHeadsUp(hit);
-  await warnTab(tabId, changeInfo.url, hit, "commit");
+  if (hit) {
+    if (hit.level === "soft") return softHeadsUp(hit);
+    return warnTab(tabId, changeInfo.url, hit, "commit");
+  }
+  // Not flagged — the opt-in document ask gets the next say (consumes here,
+  // the single spend point across both checkpoints).
+  if (await docAskFor(changeInfo.url, { consume: true })) {
+    await warnDocTab(tabId, changeInfo.url, "commit");
+  }
 }
 
 // Pre-navigation check: sees the REQUESTED url before the server answers —
@@ -601,9 +693,13 @@ async function onTabUpdated(tabId, changeInfo) {
 async function onBeforeNavigate(details) {
   if (!details || details.frameId !== 0 || !details.url) return;
   const hit = await flaggedVerdictFor(details.url, { consume: false });
-  if (!hit) return;
-  if (hit.level === "soft") return softHeadsUp(hit);
-  await warnTab(details.tabId, details.url, hit, "nav");
+  if (hit) {
+    if (hit.level === "soft") return softHeadsUp(hit);
+    return warnTab(details.tabId, details.url, hit, "nav");
+  }
+  if (await docAskFor(details.url, { consume: false })) {
+    await warnDocTab(details.tabId, details.url, "nav");
+  }
 }
 
 // webNavigation is an OPTIONAL permission: its namespace may be missing until
