@@ -312,11 +312,33 @@ els.cancelScan.addEventListener("click", () => {
 const SCORE_LABEL = { security: "Security", privacy: "Privacy", legitimacy: "Legitimacy" };
 
 const GLYPHS = {
-  check: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M20 6L9 17l-5-5"/></svg>',
-  warn: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M12 4l9 16H3z"/><path d="M12 10v4"/><path d="M12 17.4h.01"/></svg>',
-  cross: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 6l12 12"/><path d="M18 6L6 18"/></svg>',
-  question: '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9.3 9a2.8 2.8 0 0 1 5.4 1c0 1.8-2.7 2.4-2.7 4"/><path d="M12 17.6h.01"/></svg>',
+  check: ["M20 6L9 17l-5-5"],
+  warn: ["M12 4l9 16H3z", "M12 10v4", "M12 17.4h.01"],
+  cross: ["M6 6l12 12", "M18 6L6 18"],
+  question: ["M9.3 9a2.8 2.8 0 0 1 5.4 1c0 1.8-2.7 2.4-2.7 4", "M12 17.6h.01"],
 };
+
+// Stroked 24×24 glyph, built with DOM calls (no markup strings — the linter
+// rightly dislikes innerHTML in an extension page).
+function svgIcon(size, paths) {
+  const NS = "http://www.w3.org/2000/svg";
+  const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("width", String(size));
+  svg.setAttribute("height", String(size));
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("fill", "none");
+  svg.setAttribute("stroke", "currentColor");
+  svg.setAttribute("stroke-width", "2");
+  svg.setAttribute("stroke-linecap", "round");
+  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("aria-hidden", "true");
+  for (const d of paths) {
+    const path = document.createElementNS(NS, "path");
+    path.setAttribute("d", d);
+    svg.append(path);
+  }
+  return svg;
+}
 
 const VERDICTS = {
   clean: { tile: "green", glyph: "check", title: "Nothing nasty in here." },
@@ -327,7 +349,7 @@ const VERDICTS = {
 
 function tile(kind, glyph) {
   const box = text("div", `ct-tile ${kind}`);
-  box.innerHTML = GLYPHS[glyph];
+  box.append(svgIcon(24, GLYPHS[glyph]));
   return box;
 }
 
