@@ -178,7 +178,7 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
       },
       { timeoutMs: 60000, arg: BASE }
     );
-    record("clean via the page and save", !saved.timeout && /is ready/.test(readyText || ""), saved.url || readyText);
+    record("clean via the page and save", !saved.timeout && /Scrubbed\. All yours\./.test(readyText || ""), saved.url || readyText);
     await cleanPage.close();
   } catch (err) {
     record("clean via the page and save", false, err.message);
