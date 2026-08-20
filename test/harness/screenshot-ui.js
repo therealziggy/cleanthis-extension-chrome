@@ -64,7 +64,7 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
   await popup.evaluate((base) => { self.CleanThisApi.baseUrl = base; }, BASE);
   await popup.evaluate(() => {
     const ext = typeof browser !== "undefined" ? browser : chrome;
-    ext.tabs.query = async () => [{ id: 1, url: "https://verify-human-check.top/login" }];
+    ext.tabs.query = async () => [{ id: 1, url: "https://arxiv.org/pdf/2408.12345v2.pdf" }];
   });
 
   async function shootPopup(name) {
@@ -72,14 +72,23 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
     await shoot(popup, name, "dark", { fullPage: true });
   }
 
-  // idle — with the two seeded pending actions on show
+  // idle — globe + hostname + the "Clean this .pdf" offer (tab is a PDF),
+  // with the two seeded pending actions on show
   await popup.evaluate(async () => {
     await self.__ctPopup.refreshPending();
+    await self.__ctPopup.refreshSite();
     self.__ctPopup.showView("idle");
-    return document.getElementById("site").textContent;
   });
-  await popup.waitForTimeout(150);
+  await popup.waitForSelector("#clean-url:not([hidden])", { timeout: 5000 }).catch(() => {});
+  await popup.waitForTimeout(200);
   await shootPopup("popup-idle");
+
+  // idle in a forced-light override on a dark system (theme toggle proof)
+  await popup.evaluate(() => { try { localStorage.setItem("ct-theme", "light"); } catch (_) {} self.CleanThisTheme.set("light"); });
+  await popup.emulateMedia({ colorScheme: "dark" });
+  await popup.waitForTimeout(150);
+  await shoot(popup, "popup-theme-override", "dark", { fullPage: true });
+  await popup.evaluate(() => { try { localStorage.removeItem("ct-theme"); } catch (_) {} self.CleanThisTheme.set(null); });
 
   // scanning — frozen mid-flight at 42%
   await popup.evaluate(() => {
@@ -230,6 +239,12 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
     await warning.setViewportSize({ width: 900, height: 640 });
     await shoot(warning, "warning", "light");
     await shoot(warning, "warning", "dark");
+
+    // Document heads-up mode (v0.6.3)
+    const docParams = "?to=https%3A%2F%2Farxiv.org%2Fpdf%2F2408.12345.pdf&kind=document&via=nav";
+    await warning.goto(`chrome-extension://${extensionId}/warning/warning.html${docParams}`, { waitUntil: "load" });
+    await shoot(warning, "warning-document", "light");
+    await shoot(warning, "warning-document", "dark");
   }
 
   await cleanup();
