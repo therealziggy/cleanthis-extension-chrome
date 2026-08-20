@@ -30,9 +30,15 @@ body {
   border-radius: 50%;
 }
 
+/* Dark scheme: system preference (unless the user pinned light) — the
+   explicit [data-theme="dark"] duplicate below must stay IN SYNC. */
 @media (prefers-color-scheme: dark) {
-  .badge { color: var(--ct-amber-ink); }
+  :root:not([data-theme="light"]) .badge { color: var(--ct-amber-ink); }
 }
+
+/* Explicit dark override (theme toggle) — keep in sync with the media
+   block above. */
+:root[data-theme="dark"] .badge { color: var(--ct-amber-ink); }
 
 h1 {
   margin: 0 0 12px;

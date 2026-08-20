@@ -137,6 +137,29 @@ body {
 
 .site.center { text-align: center; }
 
+/* Globe + prominent hostname under the headline (v0.6.3). */
+.site-host {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  margin-top: 10px;
+  color: var(--ct-btn-bg);
+}
+
+.site-big {
+  margin: 0;
+  max-width: 100%;
+  font-size: 14px;
+  font-weight: 600;
+  color: var(--ct-text);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.clean-url { margin-top: 12px; }
+
 button.primary {
   width: 100%;
   margin-top: 14px;
@@ -288,10 +311,17 @@ button.wide { width: 100%; padding: 11px; font-weight: 600; font-size: 12.5px; b
 
 .statement.strong { color: var(--ct-text); font-weight: 600; }
 
+/* Dark scheme: system preference (unless the user pinned light) — the
+   explicit [data-theme="dark"] duplicate below must stay IN SYNC. */
 @media (prefers-color-scheme: dark) {
-  .wheel.band-green { color: var(--ct-green-on-dark); }
-  .wheel.band-red { color: var(--ct-red-on-dark); }
+  :root:not([data-theme="light"]) .wheel.band-green { color: var(--ct-green-on-dark); }
+  :root:not([data-theme="light"]) .wheel.band-red { color: var(--ct-red-on-dark); }
 }
+
+/* Explicit dark override (theme toggle) — keep in sync with the media
+   block above. */
+:root[data-theme="dark"] .wheel.band-green { color: var(--ct-green-on-dark); }
+:root[data-theme="dark"] .wheel.band-red { color: var(--ct-red-on-dark); }
 
 .verdict-actions { display: flex; gap: 8px; }
 

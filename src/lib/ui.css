@@ -39,8 +39,10 @@
   --ct-red-body-on-dark: #64748b;
 }
 
+/* Dark scheme: system preference (unless the user pinned light) — the
+   explicit [data-theme="dark"] duplicate below must stay IN SYNC. */
 @media (prefers-color-scheme: dark) {
-  :root {
+  :root:not([data-theme="light"]) {
     --ct-primary: #4db8aa;
     --ct-primary-strong: #67c6b9;
     --ct-ink: #d7e8f1;
@@ -70,6 +72,38 @@
     --ct-red-body-on-dark: #f8b4b4;
   }
 }
+
+/* Explicit dark override (theme toggle) — keep in sync with the media
+   block above. */
+:root[data-theme="dark"] {
+    --ct-primary: #4db8aa;
+    --ct-primary-strong: #67c6b9;
+    --ct-ink: #d7e8f1;
+    --ct-accent: #a8d85c;
+    --ct-accent-tint: #2c3a24;
+    --ct-muted: #93a6b2;
+    --ct-line: #33454f;
+    --ct-bg: #14232c;
+    --ct-card: #1b2f3a;
+    --ct-text: #e6eef3;
+    --ct-error-bg: #3f1d1d;
+    --ct-error-line: #7f1d1d;
+    --ct-btn-bg: #4db8aa;
+    --ct-btn-bg-hover: #67c6b9;
+    --ct-btn-text: #0d1f1c;
+    --ct-ring-track: #22333d;
+    --ct-green-tint: #14372a;
+    --ct-amber-tint: #3a2c12;
+    --ct-amber-soft: #2a2317;
+    --ct-amber-line: #5c451c;
+    --ct-amber-ink: #e0a33f;
+    --ct-red-tint: #3f1d1d;
+    --ct-dash: #3c5460;
+    --ct-faint: #6b8391;
+    --ct-green-on-dark: #4ade80;
+    --ct-red-on-dark: #f87171;
+    --ct-red-body-on-dark: #f8b4b4;
+  }
 
 * { box-sizing: border-box; }
 
@@ -312,12 +346,24 @@ select {
   color: var(--ct-muted);
 }
 
+/* Dark scheme: system preference (unless the user pinned light) — the
+   explicit [data-theme="dark"] duplicate below must stay IN SYNC. */
 @media (prefers-color-scheme: dark) {
-  .ct-checklist li.done .mark {
+  :root:not([data-theme="light"]) .ct-checklist li.done .mark {
     background: var(--ct-green-on-dark);
     border-color: var(--ct-green-on-dark);
     color: #0d1f1c;
   }
-  .ct-tile.green { color: var(--ct-green-on-dark); }
-  .ct-tile.red { color: var(--ct-red-on-dark); }
+  :root:not([data-theme="light"]) .ct-tile.green { color: var(--ct-green-on-dark); }
+  :root:not([data-theme="light"]) .ct-tile.red { color: var(--ct-red-on-dark); }
 }
+
+/* Explicit dark override (theme toggle) — keep in sync with the media
+   block above. */
+:root[data-theme="dark"] .ct-checklist li.done .mark {
+    background: var(--ct-green-on-dark);
+    border-color: var(--ct-green-on-dark);
+    color: #0d1f1c;
+  }
+:root[data-theme="dark"] .ct-tile.green { color: var(--ct-green-on-dark); }
+:root[data-theme="dark"] .ct-tile.red { color: var(--ct-red-on-dark); }
