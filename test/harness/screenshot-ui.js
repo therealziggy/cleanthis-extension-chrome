@@ -95,10 +95,11 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
       self.CleanThisApi.scanUrl = async () => ({
         ok: true,
         verdict: "clean",
+        findings: [],
         scores: {
-          security: { value: 100, band: "green", coverage: "full", driver: null },
-          privacy: { value: 68, band: "amber", coverage: "full", driver: "11 third-party trackers" },
-          legitimacy: { value: 95, band: "green", coverage: "full", driver: null },
+          security: { value: 100, band: "green", coverage: "full", driver: "No threats found" },
+          privacy: { value: 68, band: "amber", coverage: "partial", driver: "11 third-party trackers" },
+          legitimacy: { value: 95, band: "green", coverage: "full", driver: "Established domain" },
         },
       });
     });
@@ -112,11 +113,14 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
   await popup.evaluate(() => {
     self.__ctPopup.renderVerdict("https://verify-human-check.top/login", 1, {
       verdict: "malicious",
+      findings: [
+        { source: "cleanthis_db", sourceLabel: "cleanthis.io threat DB", result: "listed", severity: "high" },
+        { source: "spamhaus_dbl", sourceLabel: "Spamhaus DBL", result: "listed", severity: "medium" },
+      ],
       scores: {
-        security: {
-          value: 4, band: "red", coverage: "full",
-          driver: "A fake “verify you are human” page that wants you to paste a command into your terminal. Don't.",
-        },
+        security: { value: 4, band: "red", coverage: "full", driver: "Flagged as a phishing / malware page" },
+        privacy: { value: 41, band: "amber", coverage: "full", driver: "Fingerprinting scripts present" },
+        legitimacy: { value: 8, band: "red", coverage: "full", driver: "Promoted through spam campaigns" },
       },
     });
     self.__ctPopup.showView("verdict");

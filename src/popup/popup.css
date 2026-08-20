@@ -253,50 +253,45 @@ button.wide { width: 100%; padding: 11px; font-weight: 600; font-size: 12.5px; b
 
 .verdict-sub .when { flex: none; }
 
-.scorecells { display: flex; gap: 8px; }
+.wheels { display: flex; gap: 8px; }
 
-.scorecells .cell {
-  flex: 1;
-  padding: 9px 10px;
-  border: 1px solid var(--ct-line);
-  border-radius: 9px;
-  background: var(--ct-card);
+.wheel { flex: 1; min-width: 0; text-align: center; }
+
+.wheel svg { display: inline-block; }
+
+.wheel-track { stroke: var(--ct-ring-track); }
+
+.wheel-arc { stroke: currentColor; }
+
+.wheel-num { fill: currentColor; font-size: 20px; font-weight: 800; }
+
+.wheel-denom { fill: var(--ct-faint); font-size: 8px; font-weight: 700; }
+
+.wheel.band-green { color: var(--ct-green); }
+.wheel.band-amber { color: var(--ct-amber); }
+.wheel.band-red { color: var(--ct-red); }
+.wheel.band-none { color: var(--ct-gray); }
+
+.wheel-name { margin-top: 4px; font-size: 11px; font-weight: 600; color: var(--ct-text); }
+
+.wheel-driver {
+  margin-top: 2px;
+  font-size: 10.5px;
+  color: var(--ct-muted);
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 
-.scorecells .value {
-  font-weight: 700;
-  font-size: 16px;
-  font-variant-numeric: tabular-nums;
+.wheel-cov { color: var(--ct-faint); }
+
+.statement { margin: 0; font-size: 12px; line-height: 1.45; color: var(--ct-muted); }
+
+.statement.strong { color: var(--ct-text); font-weight: 600; }
+
+@media (prefers-color-scheme: dark) {
+  .wheel.band-green { color: var(--ct-green-on-dark); }
+  .wheel.band-red { color: var(--ct-red-on-dark); }
 }
-
-.scorecells .caption { margin-top: 1px; font-size: 10.5px; color: var(--ct-muted); }
-
-.scorecells .cell.band-green .value { color: var(--ct-green); }
-.scorecells .cell.band-amber { border-color: var(--ct-amber-line); background: var(--ct-amber-soft); }
-.scorecells .cell.band-amber .value { color: var(--ct-amber); }
-.scorecells .cell.band-red { border-color: var(--ct-error-line); background: var(--ct-error-bg); }
-.scorecells .cell.band-red .value { color: var(--ct-red); }
-.scorecells .cell.band-none .value { color: var(--ct-gray); }
-
-.findings { display: flex; flex-direction: column; gap: 8px; }
-
-.finding {
-  display: flex;
-  gap: 9px;
-  padding: 9px 11px;
-  border: 1px solid var(--ct-line);
-  border-radius: 8px;
-  background: var(--ct-card);
-  font-size: 12px;
-  line-height: 1.4;
-}
-
-.finding .glyph { flex: none; font-weight: 700; }
-
-.finding.amber { background: var(--ct-amber-soft); border-color: var(--ct-amber-line); }
-.finding.amber .glyph { color: var(--ct-amber); }
-.finding.red { background: var(--ct-error-bg); border-color: var(--ct-error-line); }
-.finding.red .glyph { color: var(--ct-red); }
 
 .verdict-actions { display: flex; gap: 8px; }
 
