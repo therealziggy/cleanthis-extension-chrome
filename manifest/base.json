@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "CleanThis",
-  "version": "0.5.5",
+  "version": "0.6.0",
   "description": "Clean files and scan webpages with cleanthis.io \u2014 CDR file sanitization and website safety checks.",
   "permissions": [
     "downloads",
