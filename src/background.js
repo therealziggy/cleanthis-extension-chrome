@@ -542,14 +542,31 @@ async function flaggedVerdictFor(url, { consume }) {
   if (flagged.listStale(list)) refreshFlaggedList(); // background top-up; this check uses what's here
   if (!list || !Array.isArray(list.entries) || !list.entries.length) return null;
 
-  if (flaggedIndex.version !== list.version || !flaggedIndex.index) {
-    flaggedIndex = { version: list.version, index: flagged.buildIndex(list.entries) };
+  if (flaggedIndex.version !== list.version || !flaggedIndex.indexes) {
+    flaggedIndex = { version: list.version, indexes: flagged.buildIndexes(list) };
   }
 
-  const bypassed = consume ? await flagged.takeBypass(ext, host) : await flagged.peekBypass(ext, host);
-  if (bypassed) return null;
+  const hit = await flagged.check(url, flaggedIndex.indexes);
+  if (!hit) return null;
 
-  return flagged.check(url, flaggedIndex.index);
+  // The proceed-anyway bypass exists for walls; a soft heads-up never blocks
+  // anything, so there is nothing to bypass.
+  if (hit.level === "wall") {
+    const bypassed = consume ? await flagged.takeBypass(ext, host) : await flagged.peekBypass(ext, host);
+    if (bypassed) return null;
+  }
+
+  return hit;
+}
+
+// The hybrid's soft tier (2026-08-20): pages on a compromised-but-legitimate
+// site get a one-time heads-up notification, never a wall.
+async function softHeadsUp(hit) {
+  if (await flagged.softAlreadyShown(ext, hit.host)) return;
+  await notify(
+    "Heads up about this site",
+    `Pages on ${hit.host} have been reported as compromised. Be careful with downloads and login forms.`
+  );
 }
 
 // `via` tells the warning page how the flagged URL sits in history: a
@@ -569,7 +586,9 @@ async function warnTab(tabId, url, hit, via) {
 async function onTabUpdated(tabId, changeInfo) {
   if (!changeInfo || !changeInfo.url) return;
   const hit = await flaggedVerdictFor(changeInfo.url, { consume: true });
-  if (hit) await warnTab(tabId, changeInfo.url, hit, "commit");
+  if (!hit) return;
+  if (hit.level === "soft") return softHeadsUp(hit);
+  await warnTab(tabId, changeInfo.url, hit, "commit");
 }
 
 // Pre-navigation check: sees the REQUESTED url before the server answers —
@@ -579,7 +598,9 @@ async function onTabUpdated(tabId, changeInfo) {
 async function onBeforeNavigate(details) {
   if (!details || details.frameId !== 0 || !details.url) return;
   const hit = await flaggedVerdictFor(details.url, { consume: false });
-  if (hit) await warnTab(details.tabId, details.url, hit, "nav");
+  if (!hit) return;
+  if (hit.level === "soft") return softHeadsUp(hit);
+  await warnTab(details.tabId, details.url, hit, "nav");
 }
 
 // webNavigation is an OPTIONAL permission: its namespace may be missing until

@@ -357,9 +357,12 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
   // from a harness.
   try {
     sw = await worker(context);
-    await sw.evaluate(async () => {
+    await sw.evaluate(async (port) => {
       const hash = await self.CleanThisFlagged.hashHost("e2e-flagged.example");
       const redirectorHash = await self.CleanThisFlagged.hashHost("e2e-redirector.example");
+      const softHash = await self.CleanThisFlagged.hashHost("e2e-soft.example");
+      // Port is dropped from the url key, so the fixture's :8080 still matches.
+      const urlHash = await self.CleanThisFlagged.hashUrl(`http://e2e-soft.example:${port}/payload.exe`);
       await chrome.storage.local.set({
         flaggedEnabled: true,
         flaggedList: {
@@ -370,9 +373,11 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
             [hash, "phishing", "2026-07"],
             [redirectorHash, "spam", "2026-07"],
           ],
+          soft: [[softHash, "compromised", "2026-08"]],
+          urls: [[urlHash, "malware", "2026-08"]],
         },
       });
-    });
+    }, FILE_PORT);
 
     const page5 = await context.newPage();
     await page5.goto(`http://e2e-flagged.example:${FILE_PORT}/`, { waitUntil: "commit" }).catch(() => {});
@@ -429,6 +434,27 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
       redirectorWarned ? "" : `no warning — landed on ${page5c.url()}`
     );
     await page5c.close().catch(() => {});
+
+    // ── the hybrid (2026-08-20): soft host = heads-up, its hack link = wall ──
+    const page5d = await context.newPage();
+    await page5d.goto(`http://e2e-soft.example:${FILE_PORT}/menu`, { waitUntil: "load" }).catch(() => {});
+    await page5d.waitForTimeout(1500);
+    const softBody = await page5d.textContent("body").catch(() => "");
+    const softMarker = await sw.evaluate(async () => {
+      const store = chrome.storage.session || chrome.storage.local;
+      const { softNotifiedHosts = [] } = await store.get("softNotifiedHosts");
+      return softNotifiedHosts;
+    });
+    record(
+      "a compromised-but-legit site loads with a heads-up, no wall",
+      /get/.test(softBody || "") && !/warning\.html/.test(page5d.url()) && softMarker.includes("e2e-soft.example"),
+      `notified: ${JSON.stringify(softMarker)}`
+    );
+
+    await page5d.goto(`http://e2e-soft.example:${FILE_PORT}/payload.exe`, { waitUntil: "commit" }).catch(() => {});
+    await urlSettles(page5d, /warning\/warning\.html/);
+    record("the exact dangerous link on that same site still gets the wall", true);
+    await page5d.close().catch(() => {});
 
     await page5.close().catch(() => {});
     sw = await worker(context);

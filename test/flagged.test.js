@@ -88,19 +88,73 @@ test("hashHost matches the server's truncated sha256", async () => {
 // ── matching ──────────────────────────────────────────────────
 
 test("check matches the exact host and an apex through the walk; misses return null", async () => {
-  const index = flagged.buildIndex([
-    [hexOf("evil-fixture.example"), "phishing", "2026-07"],
-    [hexOf("bad-apex.example"), "spam", "2026-06"],
-  ]);
+  const indexes = flagged.buildIndexes({
+    entries: [
+      [hexOf("evil-fixture.example"), "phishing", "2026-07"],
+      [hexOf("bad-apex.example"), "spam", "2026-06"],
+    ],
+  });
 
-  const exact = await flagged.check("https://evil-fixture.example/login", index);
-  assert.deepStrictEqual(exact, { host: "evil-fixture.example", cat: "phishing", seen: "2026-07" });
+  const exact = await flagged.check("https://evil-fixture.example/login", indexes);
+  assert.deepStrictEqual(exact, { level: "wall", host: "evil-fixture.example", cat: "phishing", seen: "2026-07" });
 
-  const walked = await flagged.check("https://promo.bad-apex.example/offer", index);
-  assert.deepStrictEqual(walked, { host: "bad-apex.example", cat: "spam", seen: "2026-06" });
+  const walked = await flagged.check("https://promo.bad-apex.example/offer", indexes);
+  assert.deepStrictEqual(walked, { level: "wall", host: "bad-apex.example", cat: "spam", seen: "2026-06" });
 
-  assert.strictEqual(await flagged.check("https://honest.example/", index), null);
-  assert.strictEqual(await flagged.check("http://192.168.1.20/evil", index), null);
+  assert.strictEqual(await flagged.check("https://honest.example/", indexes), null);
+  assert.strictEqual(await flagged.check("http://192.168.1.20/evil", indexes), null);
+});
+
+// ── hybrid tiers (2026-08-20) ─────────────────────────────────
+
+const urlKeyOf = (key) => crypto.createHash("sha256").update(key).digest("hex").slice(0, 16);
+
+test("hashUrl parity with the server: host+path+query, scheme and port dropped", async () => {
+  const expected = urlKeyOf("bakery.example/files/Setup.exe?v=2");
+  assert.strictEqual(await flagged.hashUrl("HTTPS://Bakery.example/files/Setup.exe?v=2"), expected);
+  assert.strictEqual(await flagged.hashUrl("http://bakery.example:8080/files/Setup.exe?v=2"), expected);
+  assert.strictEqual(await flagged.hashUrl("not a url"), null);
+});
+
+test("a soft host gives a soft hit; its exact dangerous link is still a wall", async () => {
+  const indexes = flagged.buildIndexes({
+    entries: [],
+    soft: [[hexOf("bakery.example"), "compromised", "2026-08"]],
+    urls: [[urlKeyOf("bakery.example/files/Setup.exe?v=2"), "malware", "2026-08"]],
+  });
+
+  const homepage = await flagged.check("https://bakery.example/menu", indexes);
+  assert.deepStrictEqual(homepage, { level: "soft", host: "bakery.example", cat: "compromised", seen: "2026-08" });
+
+  const hackLink = await flagged.check("https://bakery.example/files/Setup.exe?v=2", indexes);
+  assert.strictEqual(hackLink.level, "wall");
+  assert.strictEqual(hackLink.cat, "malware");
+});
+
+test("softAlreadyShown fires once per host per session", async () => {
+  const ext = fakeExt();
+  assert.strictEqual(await flagged.softAlreadyShown(ext, "bakery.example"), false); // first: show it
+  assert.strictEqual(await flagged.softAlreadyShown(ext, "bakery.example"), true); // second: stay quiet
+  assert.strictEqual(await flagged.softAlreadyShown(ext, "other.example"), false); // other hosts unaffected
+});
+
+test("refreshList stores the v2 soft/urls fields and defaults them when absent", async () => {
+  const ext = fakeExt();
+  global.fetch = async () =>
+    response({
+      body: { version: 9, entries: [[hexOf("evil-fixture.example"), "phishing", null]], soft: [["a".repeat(16), "compromised", null]], urls: [["b".repeat(16), "malware", null]] },
+      etag: '"fh-9-1"',
+    });
+  await flagged.refreshList(ext);
+  let { flaggedList } = await ext.storage.local.get("flaggedList");
+  assert.strictEqual(flaggedList.soft.length, 1);
+  assert.strictEqual(flaggedList.urls.length, 1);
+
+  global.fetch = async () => response({ body: { version: 10, entries: [] }, etag: '"fh-10-0"' });
+  await flagged.refreshList(ext);
+  ({ flaggedList } = await ext.storage.local.get("flaggedList"));
+  assert.deepStrictEqual(flaggedList.soft, []);
+  assert.deepStrictEqual(flaggedList.urls, []);
 });
 
 // ── bypass: one-shot with expiry ──────────────────────────────
