@@ -326,6 +326,20 @@ async function handleDownload(item) {
   if (item.byExtensionId && item.byExtensionId === ext.runtime.id) return;
   if (handledDownloads.has(item.id)) return;
 
+  // Only a download that is genuinely STARTING is ours to step into. Browsers
+  // re-deliver old rows in several ways — restored interrupted downloads at
+  // startup, session restore, auto-resume — and every such replay carries a
+  // terminal/stale state or an old startTime. Without these two guards a
+  // browser start could sweep the download history into the cleaning service
+  // (observed in the field 2026-08-20: days-old files re-submitted at boot,
+  // six failure offers on one startup). A real new download is always
+  // in_progress with a startTime of "just now"; anything else is history.
+  if (item.state && item.state !== "in_progress") return;
+  if (item.startTime) {
+    const started = Date.parse(item.startTime);
+    if (Number.isFinite(started) && Date.now() - started > 60 * 1000) return;
+  }
+
   const settings = await getSettings();
   const decision = intercept.decide(item, settings, await getBypass(), api.baseUrl);
   if (!decision.intercept) {

@@ -82,6 +82,64 @@ function record(name, ok, detail) {
   });
   record("an interrupted clean is recovered on restart", recovered.offered && recovered.cleared);
 
+  // 4b. Re-delivered HISTORY must never be intercepted. Browsers replay old
+  // download rows in several ways (startup restore, session restore,
+  // auto-resume); every replay carries a terminal state or an old startTime.
+  // Field report 2026-08-20: a browser start swept days-old rows into the
+  // cleaning service — six failure offers on one boot.
+  const staleSkipped = await sw.evaluate(async () => {
+    const store = chrome.storage.session || chrome.storage.local;
+    await chrome.storage.local.set({ interceptEnabled: true, level: "standard", interceptExts: ["pdf"] });
+    await store.set({ pendingActions: {} });
+    const real = self.CleanThisApi.sanitizeUrl;
+    let submissions = 0;
+    self.CleanThisApi.sanitizeUrl = async () => {
+      submissions++;
+      throw new Error("must never be reached for stale rows");
+    };
+    // A restored interrupted row (terminal state, old start).
+    await self.handleDownload({
+      id: 7201,
+      url: "https://example.com/old-a.pdf",
+      filename: "old-a.pdf",
+      state: "interrupted",
+      startTime: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
+    });
+    // A replay that LIES about state but carries its original old startTime.
+    await self.handleDownload({
+      id: 7202,
+      url: "https://example.com/old-b.pdf",
+      filename: "old-b.pdf",
+      state: "in_progress",
+      startTime: new Date(Date.now() - 3 * 24 * 3600 * 1000).toISOString(),
+    });
+    const staleSubs = submissions;
+    // POSITIVE CONTROL: a genuinely new download (fresh start, in_progress)
+    // must still be intercepted — proves the guards discriminate rather than
+    // switching interception off.
+    await self.handleDownload({
+      id: 7203,
+      url: "https://example.com/new-c.pdf",
+      filename: "new-c.pdf",
+      state: "in_progress",
+      startTime: new Date().toISOString(),
+    });
+    self.CleanThisApi.sanitizeUrl = real;
+    const { pendingActions = {} } = await store.get("pendingActions");
+    const staleOffers = Object.values(pendingActions).filter((a) => /old-[ab]/.test(a.url || "")).length;
+    return { staleSubs, freshSubs: submissions - staleSubs, staleOffers };
+  });
+  record(
+    "re-delivered old downloads are left alone",
+    staleSkipped.staleSubs === 0 && staleSkipped.staleOffers === 0,
+    `stale submissions: ${staleSkipped.staleSubs}, stale offers: ${staleSkipped.staleOffers}`
+  );
+  record(
+    "a genuinely new download is still intercepted",
+    staleSkipped.freshSubs === 1,
+    `fresh submissions: ${staleSkipped.freshSubs}`
+  );
+
   // 5. The waiver covers one download, not every future one.
   const oneShot = await sw.evaluate(async () => {
     const store = chrome.storage.session || chrome.storage.local;
