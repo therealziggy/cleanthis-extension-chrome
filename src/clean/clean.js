@@ -121,6 +121,13 @@ const STEPS = [
   "Stripping macros & metadata",
   "Rebuilding from safe content",
 ];
+// URL mode: the file never touches this device on the way in.
+const STEPS_URL = [
+  "Fetched by our server — not your device",
+  "Scanned — no virus signatures",
+  "Stripping macros & metadata",
+  "Rebuilding from safe content",
+];
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
@@ -153,9 +160,9 @@ function buildRing() {
   return { root, bar, pct };
 }
 
-function buildChecklist() {
+function buildChecklist(urlMode) {
   const list = text("ul", "ct-checklist");
-  for (const step of STEPS) {
+  for (const step of urlMode ? STEPS_URL : STEPS) {
     const row = text("li", "queued");
     row.append(text("span", "mark"), text("span", null, step));
     list.append(row);
@@ -202,16 +209,16 @@ function makeProgress(ring, checklist) {
 
 // ── state renderers ───────────────────────────────────────────
 
-function renderCleaning(file) {
+function renderCleaning(displayName, subLabel, urlMode) {
   const wrap = document.createDocumentFragment();
   const row = text("div", "clean-row");
   const ring = buildRing();
-  const checklist = buildChecklist();
+  const checklist = buildChecklist(urlMode);
   row.append(ring.root);
 
   const side = text("div", "clean-side");
   side.append(text("h2", "state-title", "Taking it apart, carefully."));
-  side.append(text("p", "state-sub", `${file.name} · ${fmtSize(file.size)}`));
+  side.append(text("p", "state-sub", [displayName, subLabel].filter(Boolean).join(" · ")));
   side.append(checklist);
   row.append(side);
   wrap.append(row);
@@ -268,22 +275,13 @@ function renderReport(report) {
 }
 
 // ── clean flow ────────────────────────────────────────────────
+// One shared core for both intakes: a picked/dropped file (upload) and a
+// document URL handed over by the popup or the warning page (the server
+// fetches it — it never touches this device on the way in).
 
-async function startClean(file) {
-  if (!file) return;
-
-  if (file.size > MAX_UPLOAD_BYTES) {
-    working(true);
-    const wrap = document.createDocumentFragment();
-    wrap.append(toneBlock("hard", "That one's too big.",
-      `50 MB is the ceiling, and ${file.name} is ${fmtSize(file.size)}. Nothing was uploaded.`));
-    wrap.append(anotherButton("Try a smaller file"));
-    show(wrap);
-    return;
-  }
-
+async function runJob({ submit, displayName, subLabel, urlMode }) {
   working(true);
-  const progress = renderCleaning(file);
+  const progress = renderCleaning(displayName, subLabel, urlMode);
 
   // Hand the job to the background script if this page closes mid-flight.
   // The port deliberately stays OPEN while an unsaved result is on screen:
@@ -309,10 +307,24 @@ async function startClean(file) {
   }
 
   try {
-    const job = await api.sanitizeFile(file, currentLevel);
-    port.postMessage({ jobId: job.jobId, downloadToken: job.downloadToken, name: file.name });
+    const job = await submit();
+
+    // URL mode only: the source-reputation pre-flight can refuse to fetch —
+    // an advisory gate, exactly as the website presents it.
+    if (job && job.sourceWarning) {
+      progress.stop();
+      try {
+        port.disconnect();
+      } catch (_) {
+        /* nothing registered */
+      }
+      renderSourceGate(job.sourceWarning);
+      return;
+    }
+
+    port.postMessage({ jobId: job.jobId, downloadToken: job.downloadToken, name: displayName });
     handedOver = true;
-    progress.setFloor(30); // uploaded
+    progress.setFloor(30); // uploaded / fetched
 
     const finished = await api.waitForJob(job.jobId, job.downloadToken, {
       onTick: (snapshot) => {
@@ -324,7 +336,7 @@ async function startClean(file) {
 
     if (finished.state === "completed") {
       await progress.finish();
-      renderDone(finished, file, job, settle);
+      renderDone(finished, displayName, subLabel, job, settle);
     } else if (finished.state === "cancelled") {
       progress.stop();
       settle();
@@ -374,6 +386,67 @@ async function startClean(file) {
   }
 }
 
+async function startClean(file) {
+  if (!file) return;
+
+  if (file.size > MAX_UPLOAD_BYTES) {
+    working(true);
+    const wrap = document.createDocumentFragment();
+    wrap.append(toneBlock("hard", "That one's too big.",
+      `50 MB is the ceiling, and ${file.name} is ${fmtSize(file.size)}. Nothing was uploaded.`));
+    wrap.append(anotherButton("Try a smaller file"));
+    show(wrap);
+    return;
+  }
+
+  await runJob({
+    submit: () => api.sanitizeFile(file, currentLevel),
+    displayName: file.name,
+    subLabel: fmtSize(file.size),
+    urlMode: false,
+  });
+}
+
+let pendingUrl = null; // the URL behind the source gate's "Clean it anyway"
+
+function displayNameForUrl(url) {
+  try {
+    const parsed = new URL(url);
+    const base = parsed.pathname.split("/").filter(Boolean).pop();
+    return base || parsed.hostname;
+  } catch (_) {
+    return url;
+  }
+}
+
+async function startCleanFromUrl(url, acknowledgeSourceWarning) {
+  if (!url) return;
+  pendingUrl = url;
+  await runJob({
+    submit: () => api.sanitizeUrl(url, currentLevel, { acknowledgeSourceWarning: acknowledgeSourceWarning === true }),
+    displayName: displayNameForUrl(url),
+    subLabel: null,
+    urlMode: true,
+  });
+}
+
+// The source host itself is flagged — an advisory stop, never a hard block.
+function renderSourceGate(message) {
+  const wrap = document.createDocumentFragment();
+  wrap.append(toneBlock("amber", "The source itself looks dangerous.",
+    `${message} You can still have it fetched and rebuilt — nothing runs on your device either way.`));
+  const actions = text("div", "done-actions");
+  const anyway = text("button", null, "Clean it anyway");
+  anyway.type = "button";
+  anyway.addEventListener("click", () => startCleanFromUrl(pendingUrl, true));
+  const never = text("button", "secondary", "Never mind");
+  never.type = "button";
+  never.addEventListener("click", resetToIdle);
+  actions.append(anyway, never);
+  wrap.append(actions);
+  show(wrap);
+}
+
 function resetToIdle() {
   els.cleanResult.hidden = true;
   els.cleanResult.textContent = "";
@@ -390,7 +463,7 @@ function anotherButton(label) {
   return row;
 }
 
-function renderDone(finished, file, job, settle) {
+function renderDone(finished, displayName, subLabel, job, settle) {
   const wrap = document.createDocumentFragment();
 
   const head = text("div", "done-head");
@@ -413,7 +486,7 @@ function renderDone(finished, file, job, settle) {
   const headText = text("div", "done-headtext");
   headText.append(text("h2", "state-title", "Scrubbed. All yours."));
   headText.append(text("p", "state-sub",
-    `${finished.downloadName || file.name} · ${levelLabel(currentLevel)} · ${fmtSize(file.size)}`));
+    [finished.downloadName || displayName, levelLabel(currentLevel), subLabel].filter(Boolean).join(" · ")));
   head.append(headText);
   wrap.append(head);
 
@@ -452,10 +525,63 @@ function renderDone(finished, file, job, settle) {
   another.type = "button";
   another.addEventListener("click", resetToIdle);
 
-  actions.append(save, another, note);
+  // A cleaned PDF can open right in the browser (?inline=1 — PDF-only on the
+  // server, sniffed there). Save stays the FIRST button in #clean-result.
+  const isPdf = /\.pdf$/i.test(finished.downloadName || displayName || "");
+  if (isPdf) {
+    const open = text("button", "secondary", "Open cleaned copy");
+    open.type = "button";
+    open.addEventListener("click", async () => {
+      open.disabled = true;
+      note.classList.remove("ok");
+      note.textContent = "";
+      try {
+        const fresh = await api.getJob(job.jobId, job.downloadToken);
+        const url = fresh && fresh.state === "completed" ? api.resolveUrl(fresh.downloadUrl) : null;
+        if (!url) throw new api.ApiError("Cleaned files are only kept for a few minutes. Clean it again for a fresh copy.");
+        ext.tabs.create({ url: `${url}&inline=1` });
+      } catch (err) {
+        note.textContent = humanize(err);
+      }
+      open.disabled = false;
+    });
+    actions.append(save, open, another, note);
+  } else {
+    actions.append(save, another, note);
+  }
   wrap.append(actions);
   show(wrap);
 }
+
+// ── URL handoff from the popup / warning page ─────────────────
+// The sender stores the URL in session storage AND sends a message: a window
+// that is still loading misses the message but finds the intent; an already-
+// open window takes the message live. The intent is consumed either way so a
+// later re-open can't replay an old clean.
+
+const intentStore = ext.storage.session || ext.storage.local;
+
+async function takeUrlIntent() {
+  try {
+    const { cleanUrlIntent } = await intentStore.get("cleanUrlIntent");
+    if (typeof cleanUrlIntent === "string" && cleanUrlIntent) {
+      await intentStore.remove("cleanUrlIntent");
+      startCleanFromUrl(cleanUrlIntent);
+    }
+  } catch (_) {
+    /* the drop zone still works */
+  }
+}
+
+ext.runtime.onMessage.addListener((message) => {
+  if (!message || message.type !== "cleanUrl" || typeof message.url !== "string") return;
+  intentStore.remove("cleanUrlIntent").catch(() => {});
+  if (document.body.classList.contains("working")) {
+    els.footStatus.textContent = " · Finish this one first, then re-click";
+    return;
+  }
+  startCleanFromUrl(message.url);
+});
 
 // ── picker + drag-and-drop share startClean ───────────────────
 
@@ -489,3 +615,5 @@ els.drop.addEventListener("drop", (event) => {
 });
 
 refreshQuota();
+
+takeUrlIntent();

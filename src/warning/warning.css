@@ -80,6 +80,18 @@ h1 {
 
 .choices button { min-width: 130px; }
 
+/* Document mode: neutral teal badge (not the amber flagged one) + a primary
+   "Clean it first" as the encouraged action. */
+.badge.neutral { color: var(--ct-primary-strong); background: var(--ct-accent-tint); }
+
+.choices .primary {
+  color: var(--ct-btn-text);
+  background: var(--ct-btn-bg);
+  border: 1px solid var(--ct-btn-bg);
+}
+
+.choices .primary:hover:not(:disabled) { background: var(--ct-btn-bg-hover); border-color: var(--ct-btn-bg-hover); }
+
 .choices .quiet {
   color: var(--ct-muted);
   background: transparent;

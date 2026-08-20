@@ -17,6 +17,8 @@ const els = {
   enabled: document.getElementById("intercept-enabled"),
   flagged: document.getElementById("flagged-enabled"),
   flaggedStatus: document.getElementById("flagged-status"),
+  docAsk: document.getElementById("doc-ask-enabled"),
+  docAskStatus: document.getElementById("doc-ask-status"),
   groups: document.getElementById("type-groups"),
   restore: document.getElementById("restore-exts"),
   quota: document.getElementById("quota"),
@@ -86,6 +88,7 @@ async function load() {
   const stored = await ext.storage.local.get([
     "interceptEnabled",
     "flaggedEnabled",
+    "docAskEnabled",
     "interceptExts",
     "quota_scan",
     "quota_upload",
@@ -104,6 +107,10 @@ async function load() {
     flaggedPerm = false;
   }
   els.flagged.checked = stored.flaggedEnabled === true && flaggedPerm;
+  // The document ask uses the SAME optional permissions as flagged warnings
+  // (it inspects the URL you navigate to, on your device) — reflect the real
+  // grant, not just the stored preference.
+  els.docAsk.checked = stored.docAskEnabled === true && flaggedPerm && webNavPerm;
 
   // Installs that granted only "tabs" (v0.5.0) miss flagged sites that
   // redirect away instantly. One off-and-on of the toggle grants the rest.
@@ -162,5 +169,35 @@ els.flagged.addEventListener("change", async () => {
 
 // The cleaning level lives in the popup's settings view and on the clean-a-file
 // window (shared storage key "level") — deliberately not duplicated here.
+
+// The document ask needs the same "tabs" + "webNavigation" grant as flagged
+// warnings (it reads the navigated URL on-device). Request in the handler
+// (user gesture); declined → snap off. Neither toggle implies the other, but
+// they share the underlying permission, so one grant satisfies both.
+els.docAsk.addEventListener("change", async () => {
+  els.docAskStatus.hidden = true;
+  if (!els.docAsk.checked) {
+    await ext.storage.local.set({ docAskEnabled: false });
+    return;
+  }
+  let granted = false;
+  try {
+    granted = await ext.permissions.request({ permissions: ["tabs", "webNavigation"] });
+  } catch (_) {
+    granted = false;
+  }
+  if (!granted) {
+    els.docAsk.checked = false;
+    els.docAskStatus.textContent = "The browser permission was declined, so this stays off.";
+    els.docAskStatus.hidden = false;
+    return;
+  }
+  await ext.storage.local.set({ docAskEnabled: true });
+  try {
+    await ext.runtime.sendMessage({ type: "flaggedEnabled" });
+  } catch (_) {
+    /* the worker attaches the nav listener on next wake anyway */
+  }
+});
 
 load();

@@ -324,6 +324,34 @@ function record(name, ok, detail) {
   record("flagged grant: fresh intent completes after the popup died", intent.enabled === true && intent.cleared === true);
   record("flagged grant: a stale intent is swept, not activated", intent.staleIgnored === true);
 
+  // The document-ask bypass is a SEPARATE namespace from the flagged wall's:
+  // a document "Open anyway" must never let the user through a flagged wall,
+  // and vice-versa. Prove both directions + the one-shot consume.
+  const docBypass = await sw.evaluate(async () => {
+    const store = chrome.storage.session || chrome.storage.local;
+    await store.remove(["docBypass", "flaggedBypass"]);
+    const out = {};
+    // 1. A doc grant is consumed once, and only for its host.
+    await self.grantDocBypass("evil.example");
+    out.wrongHost = (await self.takeDocBypass("other.example")) === false;
+    out.firstTake = (await self.takeDocBypass("evil.example")) === true;
+    out.secondTake = (await self.takeDocBypass("evil.example")) === false;
+    // 2. A doc grant does NOT satisfy the flagged consume (isolation).
+    await store.remove(["docBypass", "flaggedBypass"]);
+    await self.grantDocBypass("evil.example");
+    out.flaggedUnaffected = (await self.CleanThisFlagged.takeBypass(chrome, "evil.example")) === false;
+    // 3. …and a flagged grant does NOT satisfy the doc consume.
+    await store.remove(["docBypass", "flaggedBypass"]);
+    await self.CleanThisFlagged.grantBypass(chrome, "evil.example");
+    out.docUnaffected = (await self.takeDocBypass("evil.example")) === false;
+    await store.remove(["docBypass", "flaggedBypass"]);
+    return out;
+  });
+  record("doc bypass: wrong host isn't honoured", docBypass.wrongHost === true);
+  record("doc bypass: consumed exactly once", docBypass.firstTake === true && docBypass.secondTake === true);
+  record("doc bypass never satisfies a flagged wall", docBypass.flaggedUnaffected === true);
+  record("a flagged bypass never satisfies the doc ask", docBypass.docUnaffected === true);
+
   // Badge tiers: amber count for waiting decisions; a failed clean outranks
   // the count with a red "!" — never both at once.
   const badgeTiers = await sw.evaluate(async () => {

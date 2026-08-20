@@ -46,6 +46,22 @@
     </section>
 
     <section>
+      <h2>Document links</h2>
+      <label class="toggle">
+        <input type="checkbox" id="doc-ask-enabled">
+        <span>Ask before opening document links</span>
+      </label>
+      <p class="help">
+        Off by default. While it is on, clicking a link that goes straight to a document
+        (PDF, Word, Zip and the like) shows a quick heads-up first, offering to open a
+        rebuilt, safe copy instead of the original. Opening a booby-trapped document can be
+        enough to run it, so this is your chance to clean it first — you can always open the
+        original anyway. Uses the same on-device check as flagged-site warnings.
+      </p>
+      <p class="help flagged-status" id="doc-ask-status" hidden></p>
+    </section>
+
+    <section>
       <h2>File types to clean automatically</h2>
       <div id="type-groups" class="type-groups" aria-live="polite"></div>
       <p class="help">

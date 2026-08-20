@@ -10,8 +10,15 @@
 const ext = typeof browser !== "undefined" ? browser : chrome;
 const api = self.CleanThisApi;
 const vlib = self.CleanThisVerdict;
+const docs = self.CleanThisDocs;
+const fileTypes = self.CleanThisFileTypes;
+const theme = self.CleanThisTheme;
 
 const els = {
+  themeBtn: document.getElementById("theme-btn"),
+  themeReset: document.getElementById("theme-reset"),
+  siteHost: document.getElementById("site-host"),
+  cleanUrl: document.getElementById("clean-url"),
   settingsBtn: document.getElementById("settings-btn"),
   pending: document.getElementById("pending"),
   pendingList: document.getElementById("pending-list"),
@@ -131,21 +138,75 @@ async function refreshQuota() {
   }
 }
 
-// ── the active tab's hostname on the idle view ────────────────
+// ── the active tab on the idle view: globe + host, clean-this-file ──
 
 async function refreshSite() {
+  let url = null;
   try {
     const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
-    const url = tab && tab.url;
-    if (url && /^https?:\/\//i.test(url)) {
-      els.site.textContent = new URL(url).hostname;
-      return;
-    }
+    url = tab && tab.url;
   } catch (_) {
-    /* fall through to the empty line */
+    /* fall through to the hidden block */
   }
-  els.site.textContent = "";
+
+  if (url && /^https?:\/\//i.test(url)) {
+    els.site.textContent = new URL(url).hostname;
+    els.siteHost.hidden = false;
+  } else {
+    els.site.textContent = "";
+    els.siteHost.hidden = true;
+  }
+
+  // "Clean this .pdf" — only when the tab itself IS a cleanable document on a
+  // public host that isn't ours. The URL leaves the device only on click.
+  els.cleanUrl.hidden = true;
+  if (url) {
+    try {
+      const { payload } = await fileTypes.getConfig(ext);
+      const cleanableExt = docs.cleanableExtFor(url, payload, api.baseUrl);
+      if (cleanableExt) {
+        els.cleanUrl.textContent = `Clean this .${cleanableExt} ↗`;
+        els.cleanUrl.hidden = false;
+        els.cleanUrl.onclick = async () => {
+          try {
+            await windowStore.set({ cleanUrlIntent: url });
+            ext.runtime.sendMessage({ type: "cleanUrl", url }).catch(() => {});
+          } catch (_) {
+            /* the clean window still opens; the user can re-click there */
+          }
+          openCleanWindow();
+        };
+      }
+    } catch (_) {
+      /* no catalogue → no offer; the drop zone still works */
+    }
+  }
 }
+
+// ── theme toggle (system default, explicit override) ──────────
+
+const THEME_GLYPHS = {
+  // shown = what a click switches TO
+  sun: ["M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z", "M12 4V2", "M12 22v-2", "M4 12H2", "M22 12h-2",
+    "M5.6 5.6 4.2 4.2", "M19.8 19.8l-1.4-1.4", "M18.4 5.6l1.4-1.4", "M4.2 19.8l1.4-1.4"],
+  moon: ["M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"],
+};
+
+function paintThemeButton() {
+  els.themeBtn.textContent = "";
+  els.themeBtn.append(svgIcon(18, theme.effective() === "dark" ? THEME_GLYPHS.sun : THEME_GLYPHS.moon));
+  els.themeReset.hidden = theme.saved() === null;
+}
+
+els.themeBtn.addEventListener("click", () => {
+  theme.set(theme.effective() === "dark" ? "light" : "dark");
+  paintThemeButton();
+});
+
+els.themeReset.addEventListener("click", () => {
+  theme.set(null);
+  paintThemeButton();
+});
 
 // ── clean a file: opens the dedicated cleaning window ─────────
 // A compact popup-type window rather than a tab: it feels like the popup
@@ -688,6 +749,7 @@ self.__ctPopup = { showView, setRing, renderVerdict, renderError, refreshPending
 // ── boot ──────────────────────────────────────────────────────
 
 showView("idle");
+paintThemeButton();
 refreshSite();
 refreshQuota();
 refreshPending();
