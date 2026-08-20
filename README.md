@@ -18,11 +18,17 @@ machine, and the extension contains no accounts, keys, or secrets of any kind.
 
 Features:
 
-- **Clean a file** — its own page (drag & drop or browse), get back a sanitized copy
-  (Light / Standard / Aggressive, the same three presets as the website). The
-  cleaning level applies to file cleaning only — never to page scans.
+- **Clean a file** — its own compact window (drag & drop or browse), get back a
+  sanitized copy (Light / Standard / Aggressive, the same three presets as the
+  website). The cleaning level applies to file cleaning only — never to page scans.
+- **Clean the document you're viewing** — when the tab you're on *is* a PDF or
+  another cleanable document, the popup offers one click to have cleanthis.io fetch
+  and rebuild it; a cleaned PDF can open straight in the browser. Opening a
+  booby-trapped document can be enough to run it — this opens the rebuilt copy
+  instead.
 - **Scan this page** — one click in the popup: a safety verdict plus security /
-  privacy / legitimacy scores for the tab you're on (always a Standard scan).
+  privacy / legitimacy score wheels for the tab you're on (always a Standard scan),
+  with the same reasons and wording the website's report shows.
 - **Download protection** (opt-in, **off by default**) — intercepts risky file
   downloads, has cleanthis.io fetch and sanitize the file server-side, and hands you
   the cleaned copy instead. Every failure path offers a one-click "download the
@@ -38,7 +44,14 @@ Features:
   anyway" is always there. Hacked-but-legitimate sites get a gentler treatment: a
   one-time heads-up notification instead of a wall, while the specific dangerous
   links on them still get the full warning page. Turning it on asks for the
-  browser's "tabs" and "webNavigation" permissions in one prompt.
+  browser's "tabs" and "webNavigation" permissions in one prompt. When a warned
+  link points at a document, the warning page also offers **"Clean it first"**.
+- **Ask before opening document links** (opt-in, **off by default**) — a quick
+  heads-up before a link that goes straight to a document (PDF, Word, Zip and the
+  like) opens, offering the rebuilt copy first. The check happens on your device;
+  you can always open the original.
+- **Light / dark theme** — follows your system by default; a toggle in the popup
+  pins either theme across every extension page.
 
 cleanthis.io allows a set number of scans and files per day per user. The extension
 shows what's left, and pauses instead of retrying when the allowance runs out or the
