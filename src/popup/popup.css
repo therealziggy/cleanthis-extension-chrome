@@ -192,6 +192,24 @@ button.primary {
   border-radius: 9px;
 }
 
+/* "Need a deeper look? Deep scan ↗" — centred under the primary button on
+   idle, left-aligned as a quiet closing line on the verdict view. */
+.deep-line { margin: 10px 0 0; font-size: 11.5px; color: var(--ct-muted); text-align: center; }
+
+#view-verdict .deep-line { margin: 0; text-align: left; }
+
+button.linklike {
+  padding: 0;
+  font-size: inherit;
+  font-weight: 600;
+  color: var(--ct-btn-bg);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+}
+
+button.linklike:hover:not(:disabled) { background: transparent; text-decoration: underline; }
+
 .rule {
   display: flex;
   align-items: center;

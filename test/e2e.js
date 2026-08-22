@@ -179,6 +179,26 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
       JSON.stringify(sysState)
     );
 
+    // Verdict deep link hands off to the site scanner with Deep pre-selected
+    // (the verdict rendered for the ‹ Back check is still in the DOM).
+    await popup.evaluate(() => self.__ctPopup.showView("verdict"));
+    const deepRe = new RegExp(
+      `^${BASE.replace(/[.]/g, "\\.")}/webpage-scanner\\.html\\?url=https%3A%2F%2Fexample\\.com%2F&tier=aggressive$`
+    );
+    const [deepPage] = await Promise.all([
+      context.waitForEvent("page"),
+      popup.click("#view-verdict .linklike", { timeout: 5000 }),
+    ]);
+    await urlSettles(deepPage, deepRe);
+    record("deep handoff URL", true, deepPage.url());
+    await deepPage.close();
+
+    // The idle deep line hides when the active tab isn't scannable (here the
+    // active tab is the popup page itself). A missing element throws, so this
+    // can't pass vacuously; the clickable branch is covered just above.
+    const idleDeepHidden = await popup.evaluate(() => document.getElementById("deep-line").hidden);
+    record("idle deep link hidden off-page", idleDeepHidden === true);
+
     await popup.close();
   } catch (err) {
     record("popup UI", false, err.message);
