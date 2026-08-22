@@ -135,7 +135,15 @@
       <p class="toggle-help">Files and auto-cleaned downloads only. Page scans are always Standard.</p>
     </div>
 
-    <button id="theme-reset" type="button" class="backlink" hidden>Back to system theme</button>
+    <div>
+      <p class="seg-title">Theme</p>
+      <div id="theme-seg" class="ct-seg" role="radiogroup" aria-label="Theme">
+        <button type="button" data-theme-choice="system" aria-pressed="true">System</button>
+        <button type="button" data-theme-choice="light" aria-pressed="false">Light</button>
+        <button type="button" data-theme-choice="dark" aria-pressed="false">Dark</button>
+      </div>
+    </div>
+
     <button id="open-options" type="button" class="backlink options-link">File types &amp; all settings ↗</button>
   </section>
 

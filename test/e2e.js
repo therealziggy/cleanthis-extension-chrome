@@ -154,6 +154,31 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     record("brand opens cleanthis.io", true, sitePage.url());
     await sitePage.close();
 
+    // Theme seg: Dark pins, System releases — attribute, storage, seg agree.
+    await popup.evaluate(() => self.__ctPopup.showView("settings"));
+    await popup.click('#theme-seg button[data-theme-choice="dark"]', { timeout: 5000 });
+    const darkState = await popup.evaluate(() => ({
+      attr: document.documentElement.dataset.theme || null,
+      stored: localStorage.getItem("ct-theme"),
+      pressed: document.querySelector('#theme-seg button[aria-pressed="true"]').dataset.themeChoice,
+    }));
+    record(
+      "theme seg pins dark",
+      darkState.attr === "dark" && darkState.stored === "dark" && darkState.pressed === "dark",
+      JSON.stringify(darkState)
+    );
+    await popup.click('#theme-seg button[data-theme-choice="system"]');
+    const sysState = await popup.evaluate(() => ({
+      attr: document.documentElement.dataset.theme || null,
+      stored: localStorage.getItem("ct-theme"),
+      pressed: document.querySelector('#theme-seg button[aria-pressed="true"]').dataset.themeChoice,
+    }));
+    record(
+      "theme seg back to system",
+      sysState.attr === null && sysState.stored === null && sysState.pressed === "system",
+      JSON.stringify(sysState)
+    );
+
     await popup.close();
   } catch (err) {
     record("popup UI", false, err.message);
