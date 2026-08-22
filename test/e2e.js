@@ -145,6 +145,15 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     );
     record("verdict ‹ Back returns home", backHome === true);
 
+    // The header brand opens the website (the dev build bakes in this BASE).
+    const [sitePage] = await Promise.all([
+      context.waitForEvent("page"),
+      popup.click("#brand", { timeout: 5000 }),
+    ]);
+    await urlSettles(sitePage, new RegExp(`^${BASE.replace(/[.]/g, "\\.")}/`));
+    record("brand opens cleanthis.io", true, sitePage.url());
+    await sitePage.close();
+
     await popup.close();
   } catch (err) {
     record("popup UI", false, err.message);

@@ -15,6 +15,7 @@ const fileTypes = self.CleanThisFileTypes;
 const theme = self.CleanThisTheme;
 
 const els = {
+  brand: document.getElementById("brand"),
   themeBtn: document.getElementById("theme-btn"),
   themeReset: document.getElementById("theme-reset"),
   siteHost: document.getElementById("site-host"),
@@ -207,6 +208,12 @@ els.themeReset.addEventListener("click", () => {
   theme.set(null);
   paintThemeButton();
 });
+
+// ── header brand: opens the website ───────────────────────────
+// Same convention as "Full report ↗": open the tab, let the popup close
+// itself when focus moves (an explicit close would break the harness page).
+
+els.brand.addEventListener("click", () => ext.tabs.create({ url: api.baseUrl }));
 
 // ── clean a file: opens the dedicated cleaning window ─────────
 // A compact popup-type window rather than a tab: it feels like the popup
