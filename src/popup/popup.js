@@ -17,7 +17,7 @@ const theme = self.CleanThisTheme;
 const els = {
   brand: document.getElementById("brand"),
   themeBtn: document.getElementById("theme-btn"),
-  themeReset: document.getElementById("theme-reset"),
+  themeSeg: document.getElementById("theme-seg"),
   siteHost: document.getElementById("site-host"),
   cleanUrl: document.getElementById("clean-url"),
   settingsBtn: document.getElementById("settings-btn"),
@@ -193,20 +193,27 @@ const THEME_GLYPHS = {
   moon: ["M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"],
 };
 
-function paintThemeButton() {
+// One painter for both controls, so the header glyph and the settings seg
+// can never disagree about the current choice.
+function syncThemeUi() {
   els.themeBtn.textContent = "";
   els.themeBtn.append(svgIcon(18, theme.effective() === "dark" ? THEME_GLYPHS.sun : THEME_GLYPHS.moon));
-  els.themeReset.hidden = theme.saved() === null;
+  const choice = theme.saved() || "system";
+  for (const button of els.themeSeg.querySelectorAll("button")) {
+    button.setAttribute("aria-pressed", String(button.dataset.themeChoice === choice));
+  }
 }
 
 els.themeBtn.addEventListener("click", () => {
   theme.set(theme.effective() === "dark" ? "light" : "dark");
-  paintThemeButton();
+  syncThemeUi();
 });
 
-els.themeReset.addEventListener("click", () => {
-  theme.set(null);
-  paintThemeButton();
+els.themeSeg.addEventListener("click", (event) => {
+  const button = event.target.closest("button[data-theme-choice]");
+  if (!button) return;
+  theme.set(button.dataset.themeChoice === "system" ? null : button.dataset.themeChoice);
+  syncThemeUi();
 });
 
 // ── header brand: opens the website ───────────────────────────
@@ -759,7 +766,7 @@ self.__ctPopup = { showView, setRing, renderVerdict, renderError, refreshPending
 // ── boot ──────────────────────────────────────────────────────
 
 showView("idle");
-paintThemeButton();
+syncThemeUi();
 refreshSite();
 refreshQuota();
 refreshPending();
