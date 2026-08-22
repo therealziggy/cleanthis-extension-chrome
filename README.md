@@ -28,7 +28,9 @@ Features:
   instead.
 - **Scan this page** — one click in the popup: a safety verdict plus security /
   privacy / legitimacy score wheels for the tab you're on (always a Standard scan),
-  with the same reasons and wording the website's report shows.
+  with the same reasons and wording the website's report shows. Need more than a
+  quick look? A **Deep scan** link hands the page off to the scanner on
+  cleanthis.io with everything pre-filled — you just press Scan there.
 - **Download protection** (opt-in, **off by default**) — intercepts risky file
   downloads, has cleanthis.io fetch and sanitize the file server-side, and hands you
   the cleaned copy instead. Every failure path offers a one-click "download the
@@ -50,8 +52,9 @@ Features:
   heads-up before a link that goes straight to a document (PDF, Word, Zip and the
   like) opens, offering the rebuilt copy first. The check happens on your device;
   you can always open the original.
-- **Light / dark theme** — follows your system by default; a toggle in the popup
-  pins either theme across every extension page.
+- **Light / dark theme** — follows your system by default; pin Light or Dark with
+  the popup's header button or the System · Light · Dark picker in settings, and
+  the choice applies across every extension page.
 
 cleanthis.io allows a set number of scans and files per day per user. The extension
 shows what's left, and pauses instead of retrying when the allowance runs out or the
