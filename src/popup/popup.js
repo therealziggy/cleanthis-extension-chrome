@@ -490,6 +490,9 @@ function renderVerdict(url, tabId, result) {
   const spec = VERDICTS[verdict];
   els.verdict.textContent = "";
 
+  // The one view that had no way home (error and settings both have one).
+  els.verdict.append(actionButton("backlink", "‹ Back", () => showView("idle")));
+
   const head = text("div", "verdict-head");
   head.append(tile(spec.tile, spec.glyph));
   const headText = document.createElement("div");

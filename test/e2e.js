@@ -117,6 +117,39 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     record("scan a webpage", false, err.message);
   }
 
+  // ── 1b. popup UI: back from verdict, deep handoff, brand link, theme seg ──
+  // The popup page is driven directly (screenshot-harness pattern): verdicts
+  // rendered through the __ctPopup hook, clicks and their effects for real.
+  sw = await worker(context);
+  try {
+    const extensionId = new URL(sw.url()).host;
+    const popup = await context.newPage();
+    await popup.goto(`chrome-extension://${extensionId}/popup/popup.html`, { waitUntil: "load" });
+
+    // A verdict on screen offers ‹ Back — and it returns to the idle view.
+    await popup.evaluate(() => {
+      self.__ctPopup.renderVerdict("https://example.com/", 1, {
+        verdict: "clean",
+        findings: [],
+        scores: {
+          security: { value: 96, band: "green", coverage: "full", driver: "No threats found" },
+          privacy: { value: 88, band: "green", coverage: "full", driver: "No tracking concerns" },
+          legitimacy: { value: 91, band: "green", coverage: "full", driver: "Nothing suspicious" },
+        },
+      });
+      self.__ctPopup.showView("verdict");
+    });
+    await popup.click("#view-verdict .backlink", { timeout: 5000 });
+    const backHome = await popup.evaluate(
+      () => !document.getElementById("view-idle").hidden && document.getElementById("view-verdict").hidden
+    );
+    record("verdict ‹ Back returns home", backHome === true);
+
+    await popup.close();
+  } catch (err) {
+    record("popup UI", false, err.message);
+  }
+
   // ── 2. clean a file ─────────────────────────────────────────
   sw = await worker(context);
   try {
@@ -382,6 +415,12 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     const page5 = await context.newPage();
     await page5.goto(`http://e2e-flagged.example:${FILE_PORT}/`, { waitUntil: "commit" }).catch(() => {});
     await urlSettles(page5, /warning\/warning\.html/);
+    // The URL settles at commit, before the page's own script fills #host —
+    // wait for the text, not just the element (it exists empty in the markup).
+    await page5.waitForFunction(() => {
+      const el = document.getElementById("host");
+      return !!el && el.textContent.trim().length > 0;
+    }, { timeout: 5000 });
     const shownHost = await page5.textContent("#host");
     record("a flagged page is interrupted by the warning", /e2e-flagged\.example/.test(shownHost || ""), shownHost);
 
