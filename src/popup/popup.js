@@ -19,6 +19,8 @@ const els = {
   themeBtn: document.getElementById("theme-btn"),
   themeSeg: document.getElementById("theme-seg"),
   siteHost: document.getElementById("site-host"),
+  deepLine: document.getElementById("deep-line"),
+  deepScan: document.getElementById("deep-scan"),
   cleanUrl: document.getElementById("clean-url"),
   settingsBtn: document.getElementById("settings-btn"),
   pending: document.getElementById("pending"),
@@ -141,6 +143,8 @@ async function refreshQuota() {
 
 // ── the active tab on the idle view: globe + host, clean-this-file ──
 
+let idleTabUrl = null; // the scannable active-tab URL, for the idle deep link
+
 async function refreshSite() {
   let url = null;
   try {
@@ -153,9 +157,13 @@ async function refreshSite() {
   if (url && /^https?:\/\//i.test(url)) {
     els.site.textContent = new URL(url).hostname;
     els.siteHost.hidden = false;
+    idleTabUrl = url;
+    els.deepLine.hidden = false;
   } else {
     els.site.textContent = "";
     els.siteHost.hidden = true;
+    idleTabUrl = null;
+    els.deepLine.hidden = true;
   }
 
   // "Clean this .pdf" — only when the tab itself IS a cleanable document on a
@@ -221,6 +229,10 @@ els.themeSeg.addEventListener("click", (event) => {
 // itself when focus moves (an explicit close would break the harness page).
 
 els.brand.addEventListener("click", () => ext.tabs.create({ url: api.baseUrl }));
+
+els.deepScan.addEventListener("click", () => {
+  if (idleTabUrl) ext.tabs.create({ url: deepUrl(idleTabUrl) });
+});
 
 // ── clean a file: opens the dedicated cleaning window ─────────
 // A compact popup-type window rather than a tab: it feels like the popup
@@ -492,6 +504,12 @@ function reportUrl(url) {
   return `${api.baseUrl}/webpage-scanner.html?url=${encodeURIComponent(url)}`;
 }
 
+// The site's scanner prefills from these params and pre-selects Deep; it
+// deliberately never auto-submits, so the user starts the scan there.
+function deepUrl(url) {
+  return `${api.baseUrl}/webpage-scanner.html?url=${encodeURIComponent(url)}&tier=aggressive`;
+}
+
 function actionButton(className, label, onClick) {
   const button = text("button", className, label);
   button.type = "button";
@@ -554,6 +572,15 @@ function renderVerdict(url, tabId, result) {
 
   if (verdict === "malicious") {
     els.verdict.append(text("p", "verdict-closer", "You can still proceed — we'll just look at you funny."));
+  } else {
+    // The moment deep matters is right after quick results — the wheels above
+    // may already say "limited (Quick scan)". Malicious keeps its two actions.
+    const deep = text("p", "deep-line");
+    deep.append("Need a deeper look? ");
+    deep.append(actionButton("linklike", "Deep scan ↗", () => {
+      ext.tabs.create({ url: deepUrl(url) });
+    }));
+    els.verdict.append(deep);
   }
 }
 
