@@ -267,20 +267,131 @@ async function watchJob({ jobId, downloadToken, name }) {
   }
 }
 
+// ── page-job handoff records ──────────────────────────────────
+// The port protocol above the connect handler is not enough on its own: this
+// worker's copy of a handed-over job dies with the worker (an idle port does
+// not keep an MV3 worker alive), and a page that closes just then would tell
+// no one. So the page also writes a per-job record BEFORE announcing the job
+// (`pageJob:<jobId>`, in the same session-preferring store — a browser
+// restart wipes it, correctly: the job would be long expired), reconnects
+// when its port drops, and removes the record when it settles. Here, claims
+// are exclusive (serialized on storageChain, marked rather than deleted so a
+// worker that dies mid-watch leaves a claim another sweep can re-take), and
+// a start-time sweep picks up orphans.
+
+const PAGE_JOB_PREFIX = "pageJob:";
+const PAGE_JOB_MAX_AGE_MS = 30 * 60 * 1000;
+const PAGE_JOB_CLAIM_MS = 2 * 60 * 1000;
+const PAGE_JOB_SWEEP_DELAY_MS = 5000;
+
+// Jobs whose page is connected to THIS worker instance. The sweep leaves
+// those to their page.
+const liveJobPorts = new Map();
+// Harness hook (the __ctPopup pattern): recovery.js needs to stage a live
+// port without opening a real page.
+self.__ctJobs = { liveJobPorts };
+
+function claimPageJob(jobId) {
+  const key = PAGE_JOB_PREFIX + jobId;
+  let result = { absent: true };
+  storageChain = storageChain
+    .catch(() => {})
+    .then(async () => {
+      const stored = await actionStore.get(key);
+      const row = stored[key];
+      if (!row) {
+        result = { absent: true };
+        return;
+      }
+      if (Number.isFinite(row.claimedAt) && Date.now() - row.claimedAt < PAGE_JOB_CLAIM_MS) {
+        result = { held: true };
+        return;
+      }
+      result = { job: row };
+      await actionStore.set({ [key]: { ...row, claimedAt: Date.now() } });
+    });
+  return storageChain.then(() => result);
+}
+
+function releasePageJob(jobId) {
+  const key = PAGE_JOB_PREFIX + jobId;
+  storageChain = storageChain.catch(() => {}).then(() => actionStore.remove(key));
+  return storageChain;
+}
+
+// watchJob never throws (every outcome ends in a notification), so the
+// release always runs — on failure too: the failure was announced, which is
+// as dealt-with as a job gets.
+function watchPageJob(job) {
+  return watchJob(job).then(
+    () => releasePageJob(job.jobId).catch(() => {}),
+    () => releasePageJob(job.jobId).catch(() => {})
+  );
+}
+
+async function recoverPageJobs() {
+  let all = {};
+  try {
+    all = await actionStore.get(null);
+  } catch (_) {
+    return;
+  }
+  const watches = [];
+  for (const [key, row] of Object.entries(all)) {
+    if (!key.startsWith(PAGE_JOB_PREFIX)) continue;
+    const jobId = key.slice(PAGE_JOB_PREFIX.length);
+    if (liveJobPorts.has(jobId)) continue; // its page is alive and polling
+    if (!row || !Number.isFinite(row.at) || Date.now() - row.at > PAGE_JOB_MAX_AGE_MS) {
+      // Signed links and job rows are long gone server-side; announcing
+      // anything about this job now would be a lie. Drop it silently.
+      watches.push(releasePageJob(jobId).catch(() => {}));
+      continue;
+    }
+    const claim = await claimPageJob(jobId);
+    if (claim.job) watches.push(watchPageJob(claim.job));
+  }
+  await Promise.all(watches);
+}
+
 ext.runtime.onConnect.addListener((port) => {
   if (port.name !== "job-watch") return;
   let pending = null;
   let handledByPopup = false;
 
   port.onMessage.addListener((msg) => {
-    if (msg && msg.done) handledByPopup = true;
-    else if (msg && msg.jobId) pending = msg;
+    if (msg && msg.done) {
+      handledByPopup = true;
+      if (pending) liveJobPorts.delete(pending.jobId);
+    } else if (msg && msg.jobId) {
+      pending = msg;
+      liveJobPorts.set(msg.jobId, port);
+    }
   });
 
   port.onDisconnect.addListener(() => {
-    if (pending && !handledByPopup) watchJob(pending);
+    if (pending) liveJobPorts.delete(pending.jobId);
+    if (!pending || handledByPopup) return;
+    const job = pending;
+    claimPageJob(job.jobId)
+      .then((claim) => {
+        // A held claim means another path is already watching. No record at
+        // all usually means the page's write failed — and with nothing
+        // stored there is also nothing a sweep could double-announce, so the
+        // in-memory copy is safe to act on.
+        if (claim.job) return watchPageJob(claim.job);
+        if (claim.absent) return watchJob(job);
+        return undefined;
+      })
+      .catch(() => {});
   });
 });
+
+// Orphan sweep, once per worker start, after a grace period: the wake that
+// runs this is usually caused by the page's own reconnect, and that port has
+// to register in liveJobPorts before the sweep decides who owns which job.
+setTimeout(() => {
+  recoverPageJobs().catch(() => {});
+}, PAGE_JOB_SWEEP_DELAY_MS);
 
 // ── download interception ─────────────────────────────────────
 // Opt-in. When a download matches, we stop it, have the server fetch and clean

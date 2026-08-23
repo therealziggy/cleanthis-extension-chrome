@@ -288,16 +288,44 @@ async function runJob({ submit, displayName, subLabel, urlMode }) {
   // disconnecting is what tells the background to take the job over, so doing
   // it early would double-offer a file the page is already showing. (v1's
   // popup had exactly that bug — plus a dead-port error on a late Save click.)
-  const port = ext.runtime.connect({ name: "job-watch" });
+  //
+  // The worker can also die UNDER the page (its ~30s idle timer keeps running
+  // while the page does the polling), taking its copy of the handoff with it.
+  // From here that is exactly a port drop, so a dropped port is reconnected —
+  // which wakes a fresh worker — and the job re-handed. And before the job is
+  // announced at all, it is written to storage (`pageJob:<jobId>`): the
+  // worker's sweep owns the window where this page closes before a reconnect
+  // could land.
+  const handoffStore = ext.storage.session || ext.storage.local;
+  let port = null;
+  let settled = false;
+  let jobMsg = null;
   let handedOver = false;
 
-  // Mark the job dealt-with and close the port. A dead port means the worker
-  // restarted and its recovery path owns the job now — never an error here.
+  function openPort() {
+    port = ext.runtime.connect({ name: "job-watch" });
+    port.onDisconnect.addListener(() => {
+      if (settled || !jobMsg) return;
+      openPort();
+      try {
+        port.postMessage(jobMsg);
+      } catch (_) {
+        /* the next drop retries; the storage record covers the worst case */
+      }
+    });
+  }
+  openPort();
+
+  // Mark the job dealt-with: drop the handoff record, tell the worker, close
+  // the port. A dead port means a restarted worker — whose sweep reads the
+  // record, so removing it first settles the job for that path too.
   function settle() {
+    settled = true;
+    if (jobMsg) handoffStore.remove("pageJob:" + jobMsg.jobId).catch(() => {});
     try {
       port.postMessage({ done: true });
     } catch (_) {
-      /* recovery owns it */
+      /* worker gone; the removed record settles it */
     }
     try {
       port.disconnect();
@@ -322,7 +350,15 @@ async function runJob({ submit, displayName, subLabel, urlMode }) {
       return;
     }
 
-    port.postMessage({ jobId: job.jobId, downloadToken: job.downloadToken, name: displayName });
+    jobMsg = { jobId: job.jobId, downloadToken: job.downloadToken, name: displayName };
+    // The record goes down BEFORE the announcement: any worker that can hear
+    // about this job must also be able to claim it if this page vanishes.
+    try {
+      await handoffStore.set({ ["pageJob:" + job.jobId]: { ...jobMsg, at: Date.now() } });
+    } catch (_) {
+      /* the port protocol still covers the common case */
+    }
+    port.postMessage(jobMsg);
     handedOver = true;
     progress.setFloor(30); // uploaded / fetched
 

@@ -271,6 +271,91 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     record("clean via the page and save", false, err.message);
   }
 
+  // ── 2c. worker death mid-clean: the page re-hands the job ──
+  // The worker's copy of the handoff dies with it; from the page, a worker
+  // death looks like its port dropping. The page must reconnect (which wakes
+  // a fresh worker) and re-hand the job, and its handoff record must be on
+  // disk while the job is unsettled. runtime.connect is stubbed so the
+  // "worker death" can be staged deterministically.
+  try {
+    sw = await worker(context);
+    const extensionId = new URL(sw.url()).host;
+    const page2c = await context.newPage();
+    await page2c.goto(`chrome-extension://${extensionId}/clean/clean.html`, { waitUntil: "load" });
+    await page2c.evaluate(() => {
+      const pageExt = typeof browser !== "undefined" ? browser : chrome;
+      self.__fakePorts = [];
+      pageExt.runtime.connect = () => {
+        const listeners = [];
+        const port = {
+          messages: [],
+          postMessage(msg) {
+            port.messages.push(msg);
+          },
+          disconnect() {
+            port.closed = true;
+          },
+          onDisconnect: { addListener: (fn) => listeners.push(fn) },
+          die() {
+            listeners.forEach((fn) => fn());
+          },
+        };
+        self.__fakePorts.push(port);
+        return port;
+      };
+      // A job that never finishes, so the page sits in the cleaning state.
+      self.CleanThisApi.sanitizeFile = async () => ({ jobId: "reconnect-job", downloadToken: "dt" });
+      self.CleanThisApi.waitForJob = () => new Promise(() => {});
+    });
+    await page2c.setInputFiles("#file-input", {
+      name: "reconnect.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("port drop fixture\n"),
+    });
+    await page2c.waitForFunction(
+      () => self.__fakePorts.length === 1 && self.__fakePorts[0].messages.some((m) => m && m.jobId),
+      null,
+      { timeout: 15000 }
+    );
+
+    const record2c = await page2c.evaluate(async () => {
+      const pageExt = typeof browser !== "undefined" ? browser : chrome;
+      const store = pageExt.storage.session || pageExt.storage.local;
+      const { "pageJob:reconnect-job": row = null } = await store.get("pageJob:reconnect-job");
+      return row;
+    });
+    record(
+      "the handoff record is written for an in-flight page job",
+      !!record2c && record2c.downloadToken === "dt",
+      JSON.stringify(record2c)
+    );
+
+    // Stage the worker death: the page's port drops.
+    await page2c.evaluate(() => self.__fakePorts[0].die());
+    const reconnected = await page2c
+      .waitForFunction(
+        () => self.__fakePorts.length === 2 && self.__fakePorts[1].messages.some((m) => m && m.jobId === "reconnect-job"),
+        null,
+        { timeout: 5000 }
+      )
+      .then(() => true)
+      .catch(() => false);
+    record(
+      "a dropped port is reconnected and the job re-handed",
+      reconnected === true,
+      `ports: ${await page2c.evaluate(() => self.__fakePorts.length)}`
+    );
+
+    await page2c.close();
+    sw = await worker(context);
+    await sw.evaluate(async () => {
+      const store = chrome.storage.session || chrome.storage.local;
+      await store.remove("pageJob:reconnect-job");
+    });
+  } catch (err) {
+    record("page job reconnect", false, err.message);
+  }
+
   // ── 3. intercepted download ─────────────────────────────────
   sw = await worker(context);
   await sw.evaluate(() => chrome.storage.local.set({ interceptEnabled: true, level: "standard" }));

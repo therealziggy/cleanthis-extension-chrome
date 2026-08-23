@@ -357,6 +357,67 @@ function record(name, ok, detail) {
     outlivesToast.started === "https://example.com/toast.pdf" && outlivesToast.clearedAfterUse === true
   );
 
+  // Page-job handoff: a clean started on the clean page must reach the user
+  // even if the worker died while the page was open (the worker's copy of the
+  // handoff dies with it) and the page closed before its reconnect landed.
+  // The page writes a pageJobs record; a worker sweep claims and watches
+  // orphans. Claims are exclusive so a disconnect and a sweep can never both
+  // announce the same job.
+  const pageJobs = await sw.evaluate(async () => {
+    const store = chrome.storage.session || chrome.storage.local;
+    const out = {};
+    await store.set({ pendingActions: {} });
+    const realWait = self.CleanThisApi.waitForJob;
+    self.CleanThisApi.waitForJob = async () => ({ state: "completed" });
+
+    // 1. An orphaned fresh record is claimed, watched, offered, released.
+    await store.set({ "pageJob:pj-1": { jobId: "pj-1", downloadToken: "d1", name: "q3.docx", at: Date.now() } });
+    await self.recoverPageJobs();
+    const { pendingActions = {}, "pageJob:pj-1": afterSweep = null } = await store.get([
+      "pendingActions",
+      "pageJob:pj-1",
+    ]);
+    out.offered = Object.values(pendingActions).some((a) => a.kind === "download-cleaned" && a.jobId === "pj-1");
+    out.released = !afterSweep;
+
+    // 2. Claims are exclusive while fresh.
+    await store.set({ "pageJob:pj-2": { jobId: "pj-2", downloadToken: "d2", name: "x", at: Date.now() } });
+    const first = await self.claimPageJob("pj-2");
+    const second = await self.claimPageJob("pj-2");
+    out.claimOnce = !!first.job && second.held === true && !second.job;
+
+    // 3. A record older than the announceable window is dropped silently —
+    // signed links and job rows are long gone, and a "Cleaning failed"
+    // notification for a job that finished hours ago would be a lie.
+    await store.set({
+      pendingActions: {},
+      "pageJob:pj-3": { jobId: "pj-3", downloadToken: "d3", name: "old", at: Date.now() - 31 * 60 * 1000 },
+    });
+    await self.recoverPageJobs();
+    const { pendingActions: staleOffers = {}, "pageJob:pj-3": afterStale = null } = await store.get([
+      "pendingActions",
+      "pageJob:pj-3",
+    ]);
+    out.staleDropped = Object.keys(staleOffers).length === 0 && !afterStale;
+
+    // 4. A record whose page is alive (live port in THIS worker) is left to
+    // the page.
+    await store.set({ "pageJob:pj-4": { jobId: "pj-4", downloadToken: "d4", name: "live", at: Date.now() } });
+    self.__ctJobs.liveJobPorts.set("pj-4", {});
+    await self.recoverPageJobs();
+    const { "pageJob:pj-4": afterLive = null } = await store.get("pageJob:pj-4");
+    self.__ctJobs.liveJobPorts.delete("pj-4");
+    out.liveSkipped = !!afterLive && !afterLive.claimedAt;
+
+    self.CleanThisApi.waitForJob = realWait;
+    await store.remove(["pageJob:pj-1", "pageJob:pj-2", "pageJob:pj-3", "pageJob:pj-4"]);
+    return out;
+  });
+  record("an orphaned page job is swept into a save offer", pageJobs.offered === true && pageJobs.released === true);
+  record("a page-job claim is exclusive", pageJobs.claimOnce === true);
+  record("a page job too old to announce is dropped silently", pageJobs.staleDropped === true);
+  record("a live page's job is left to the page", pageJobs.liveSkipped === true);
+
   // The flagged-toggle grant can outlive the popup: the browser's permission
   // prompt steals focus, the popup dies, and the change handler's continuation
   // (which would write flaggedEnabled) never runs even though the user clicked
