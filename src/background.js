@@ -323,12 +323,26 @@ function fileNameOf(url) {
   }
 }
 
+// A filename delta can race the initial consideration of the same row; one
+// look at a time, the loser dropped — a doubled look could submit twice.
+const consideringDownloads = new Set();
+
 async function handleDownload(item) {
   // Our own downloads (the cleaned file, or one the user asked for untouched)
   // must never come back through here.
   if (item.byExtensionId && item.byExtensionId === ext.runtime.id) return;
   if (handledDownloads.has(item.id)) return;
+  if (consideringDownloads.has(item.id)) return;
 
+  consideringDownloads.add(item.id);
+  try {
+    await considerDownload(item);
+  } finally {
+    consideringDownloads.delete(item.id);
+  }
+}
+
+async function considerDownload(item) {
   // Only a download that is genuinely STARTING is ours to step into. Browsers
   // re-deliver old rows in several ways — restored interrupted downloads at
   // startup, session restore, auto-resume — and every such replay carries a
@@ -347,8 +361,14 @@ async function handleDownload(item) {
   const decision = intercept.decide(item, settings, await getBypass(), api.baseUrl);
   if (!decision.intercept) {
     // The waiver covered this one download; spend it so a later, deliberate
-    // download of the same address is cleaned again.
-    if (decision.reason === "bypassed") await consumeBypass(item.url);
+    // download of the same address is cleaned again. The row is marked
+    // handled at the same time: its spent waiver would otherwise be invisible
+    // to a later filename delta, which would re-decide the very download the
+    // user asked to keep untouched.
+    if (decision.reason === "bypassed") {
+      handledDownloads.add(item.id);
+      await consumeBypass(item.url);
+    }
     return;
   }
 
@@ -493,6 +513,25 @@ ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
 ext.downloads.onCreated.addListener((item) => {
   handleDownload(item).catch(() => {
+    /* handleDownload reports its own failures to the user */
+  });
+});
+
+// Chromium often creates a download before it has determined the filename: a
+// Content-Disposition name on a download.php-style URL arrives moments later
+// as an onChanged delta, and that delta is the only chance to intercept those
+// (the URL itself carries no suffix to match). handleDownload's own guards —
+// already-handled rows, stale replays, the spent-waiver mark, the cooldown —
+// make the second look safe to take. Firefox names rows before onCreated, so
+// the delta path is a no-op there.
+async function handleDownloadDelta(delta) {
+  if (!delta || !delta.filename || !delta.filename.current) return;
+  const [row] = await ext.downloads.search({ id: delta.id });
+  if (row) await handleDownload(row);
+}
+
+ext.downloads.onChanged.addListener((delta) => {
+  handleDownloadDelta(delta).catch(() => {
     /* handleDownload reports its own failures to the user */
   });
 });

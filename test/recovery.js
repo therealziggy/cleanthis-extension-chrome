@@ -140,6 +140,70 @@ function record(name, ok, detail) {
     `fresh submissions: ${staleSkipped.freshSubs}`
   );
 
+  // 4c. A filename that arrives only after onCreated still gets the second
+  // look. Chromium often creates download.php-style rows with no filename
+  // yet; the Content-Disposition name lands moments later as an onChanged
+  // delta. The second look must submit exactly once — and must never
+  // re-decide a download whose bypass waiver was already spent.
+  const lateName = await sw.evaluate(async () => {
+    const store = chrome.storage.session || chrome.storage.local;
+    await chrome.storage.local.set({ interceptEnabled: true, level: "standard", interceptExts: ["pdf"] });
+    await store.set({ pendingActions: {}, bypassUrls: [] });
+    const realSanitize = self.CleanThisApi.sanitizeUrl;
+    const realSearch = chrome.downloads.search;
+    let submissions = 0;
+    self.CleanThisApi.sanitizeUrl = async () => {
+      submissions++;
+      throw new Error("stop after counting the submission");
+    };
+
+    // onCreated: opaque URL, no filename yet — declined quietly.
+    const row = {
+      id: 7501,
+      url: "https://example.com/download?id=9",
+      filename: "",
+      state: "in_progress",
+      startTime: new Date().toISOString(),
+    };
+    await self.handleDownload({ ...row });
+    const afterCreated = submissions;
+
+    // The browser then determines the name; the delta carries it.
+    chrome.downloads.search = async () => [{ ...row, filename: "/home/user/Downloads/report.pdf" }];
+    await self.handleDownloadDelta({ id: 7501, filename: { current: "/home/user/Downloads/report.pdf" } });
+    const afterDelta = submissions;
+
+    // The other direction: a download whose waiver was spent at onCreated
+    // must NOT be re-decided by its later filename delta — that would clean
+    // the very file the user asked to keep untouched.
+    await store.set({ bypassUrls: ["https://example.com/waived?id=3"] });
+    const waived = {
+      id: 7502,
+      url: "https://example.com/waived?id=3",
+      filename: "",
+      state: "in_progress",
+      startTime: new Date().toISOString(),
+    };
+    await self.handleDownload({ ...waived });
+    chrome.downloads.search = async () => [{ ...waived, filename: "/home/user/Downloads/waived.pdf" }];
+    await self.handleDownloadDelta({ id: 7502, filename: { current: "/home/user/Downloads/waived.pdf" } });
+    const afterWaived = submissions;
+
+    chrome.downloads.search = realSearch;
+    self.CleanThisApi.sanitizeUrl = realSanitize;
+    return { afterCreated, afterDelta, afterWaived };
+  });
+  record(
+    "a late filename triggers the second look exactly once",
+    lateName.afterCreated === 0 && lateName.afterDelta === 1,
+    `submissions ${lateName.afterCreated}→${lateName.afterDelta}`
+  );
+  record(
+    "a spent waiver is never re-decided by its filename delta",
+    lateName.afterWaived === 1,
+    `submissions after the waived delta: ${lateName.afterWaived}`
+  );
+
   // 5. The waiver covers one download, not every future one.
   const oneShot = await sw.evaluate(async () => {
     const store = chrome.storage.session || chrome.storage.local;
