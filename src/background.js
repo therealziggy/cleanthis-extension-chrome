@@ -13,7 +13,7 @@
 // Chrome loads the shared libraries into the worker here; Firefox lists them
 // in the manifest instead (event pages have no importScripts).
 if (typeof importScripts === "function") {
-  importScripts("lib/api.js", "lib/intercept.js", "lib/filetypes.js", "lib/flagged.js", "lib/docs.js");
+  importScripts("lib/api.js", "lib/intercept.js", "lib/filetypes.js", "lib/flagged.js", "lib/docs.js", "lib/scantarget.js");
 }
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
@@ -758,3 +758,54 @@ if (ext.runtime.onStartup) {
 ext.runtime.onInstalled.addListener(() => {
   console.log("CleanThis installed");
 });
+
+// ---- Right-click "Scan with CleanThis" --------------------------------------
+//
+// One item for both links and selections. One, not two: right-clicking a
+// *selected link* activates both contexts at once, and Chrome folds multiple
+// visible items into a "CleanThis ▸" submenu — a single top-level item keeps
+// the extension icon beside it instead. No targetUrlPatterns either: how it
+// interacts with plain selections (which have no target URL) is unspecified,
+// so scheme filtering lives in the click handler — one code path for both.
+//
+// Registration is idempotent (removeAll → create) and runs at top level on
+// every worker start as well as on install: Chrome persists menus, but
+// Firefox event pages can lose them across browser restarts, and unpacked
+// reloads re-fire onInstalled — the same defensive-but-eager posture as
+// syncWebNavListener above.
+const SCAN_MENU_ID = "cleanthis-scan";
+
+function registerScanMenu() {
+  if (!ext.contextMenus) return;
+  const item = { id: SCAN_MENU_ID, title: "Scan with CleanThis", contexts: ["link", "selection"] };
+  // Firefox draws no icon on context items by default; `icons` is its
+  // menus-API extra, and Chrome's strict schema rejects unknown keys.
+  if (typeof browser !== "undefined" && browser.menus) item.icons = { 16: "icons/icon-16.png" };
+  ext.contextMenus.removeAll(() => {
+    ext.contextMenus.create(item, () => {
+      void ext.runtime.lastError; // duplicate-id during a racing wake — harmless
+    });
+  });
+}
+
+// Prefers the actual link target; a right-click on a mailto: link with URL
+// text selected still scans the selection. Prefill-only — the scanner page
+// never auto-submits — so a misclick costs a tab, not a scan.
+async function handleContextScan(info) {
+  const resolveTarget = self.CleanThisScanTarget.resolve;
+  const hit = [info.linkUrl, info.selectionText].map(resolveTarget).find((r) => r.ok);
+  if (!hit) {
+    await notify("CleanThis", "Couldn't find a web address in that selection.");
+    return { opened: false };
+  }
+  await ext.tabs.create({ url: `${api.baseUrl}/webpage-scanner.html?url=${encodeURIComponent(hit.url)}` });
+  return { opened: true, url: hit.url };
+}
+
+if (ext.contextMenus) {
+  ext.contextMenus.onClicked.addListener((info) => {
+    if (info.menuItemId === SCAN_MENU_ID) handleContextScan(info).catch(() => {});
+  });
+}
+ext.runtime.onInstalled.addListener(registerScanMenu);
+registerScanMenu();

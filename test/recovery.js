@@ -390,6 +390,70 @@ function record(name, ok, detail) {
     JSON.stringify(badgeTiers.failed)
   );
 
+  // Right-click scan: a real link opens the scanner prefilled. No harness can
+  // open a native context menu (browser chrome), so the click handler is
+  // driven directly with the info object the menu would deliver.
+  const ctxScan = await sw.evaluate(async () => {
+    const tabs = [];
+    const realCreate = chrome.tabs.create;
+    chrome.tabs.create = (opts) => {
+      tabs.push(opts);
+      return Promise.resolve({ id: 991 });
+    };
+    const outcome = await self.handleContextScan({
+      menuItemId: "cleanthis-scan",
+      linkUrl: "https://example.com/promo?x=1",
+    });
+    chrome.tabs.create = realCreate;
+    return { outcome, tabs };
+  });
+  record(
+    "context-menu click on a link opens the prefilled scanner",
+    ctxScan.outcome && ctxScan.outcome.opened === true &&
+      ctxScan.tabs.length === 1 &&
+      /\/webpage-scanner\.html\?url=https%3A%2F%2Fexample\.com%2Fpromo%3Fx%3D1$/.test(ctxScan.tabs[0].url) &&
+      !/tier=/.test(ctxScan.tabs[0].url),
+    ctxScan.tabs[0] && ctxScan.tabs[0].url
+  );
+
+  // Junk selection: notify, never open a tab. The selection fallback is the
+  // positive control — a bare domain via selectionText must still open.
+  const ctxJunk = await sw.evaluate(async () => {
+    const tabs = [];
+    const notes = [];
+    const realCreate = chrome.tabs.create;
+    const realNotify = chrome.notifications.create;
+    chrome.tabs.create = (opts) => {
+      tabs.push(opts);
+      return Promise.resolve({ id: 992 });
+    };
+    chrome.notifications.create = (id, options, cb) => {
+      notes.push(options);
+      if (cb) cb();
+    };
+    const junk = await self.handleContextScan({
+      menuItemId: "cleanthis-scan",
+      selectionText: "just some words I typed",
+    });
+    const bare = await self.handleContextScan({
+      menuItemId: "cleanthis-scan",
+      selectionText: "  example.org  ",
+    });
+    chrome.tabs.create = realCreate;
+    chrome.notifications.create = realNotify;
+    return { junk, bare, tabs, notes };
+  });
+  record(
+    "junk selection notifies; bare-domain selection still scans",
+    ctxJunk.junk && ctxJunk.junk.opened === false &&
+      ctxJunk.notes.length === 1 &&
+      /web address/.test(ctxJunk.notes[0].message) &&
+      ctxJunk.bare && ctxJunk.bare.opened === true &&
+      ctxJunk.tabs.length === 1 &&
+      /url=https%3A%2F%2Fexample\.org%2F$/.test(ctxJunk.tabs[0].url),
+    `${ctxJunk.notes.length} notification(s), ${ctxJunk.tabs.length} tab(s)`
+  );
+
   await cleanup();
   const failed = results.filter((r) => !r.ok);
   console.log(`\n${results.length - failed.length}/${results.length} checks passed`);

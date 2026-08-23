@@ -6,6 +6,7 @@
       "lib/filetypes.js",
       "lib/flagged.js",
       "lib/docs.js",
+      "lib/scantarget.js",
       "background.js"
     ]
   },
