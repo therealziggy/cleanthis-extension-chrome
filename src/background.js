@@ -909,8 +909,15 @@ if (ext.runtime.onStartup) {
   });
 }
 
-ext.runtime.onInstalled.addListener(() => {
-  console.log("CleanThis installed");
+ext.runtime.onInstalled.addListener((details) => {
+  // First install only — not updates, and not Firefox temporary add-ons
+  // (details.temporary), which re-fire "install" on every about:debugging
+  // load and would grow a welcome tab each time.
+  if (details && details.reason === "install" && !details.temporary) {
+    Promise.resolve(ext.tabs.create({ url: ext.runtime.getURL("welcome/welcome.html") })).catch(() => {
+      /* the popup and options still introduce the features */
+    });
+  }
 });
 
 // ---- Right-click "Scan with CleanThis" --------------------------------------

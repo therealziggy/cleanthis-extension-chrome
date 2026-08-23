@@ -231,6 +231,13 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
   await shoot(options, "options", "light", { fullPage: true });
   await shoot(options, "options", "dark", { fullPage: true });
 
+  // ── welcome page (v0.6.7) ─────────────────────────────────
+  const welcomePage = await context.newPage();
+  await welcomePage.goto(`chrome-extension://${extensionId}/welcome/welcome.html`, { waitUntil: "load" });
+  await welcomePage.setViewportSize({ width: 900, height: 950 });
+  await shoot(welcomePage, "welcome", "light", { fullPage: true });
+  await shoot(welcomePage, "welcome", "dark", { fullPage: true });
+
   // ── warning page (only once it exists, v0.5) ──────────────
   if (fs.existsSync(path.join(EXT_DIR, "warning", "warning.html"))) {
     const warning = await context.newPage();

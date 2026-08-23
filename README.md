@@ -62,6 +62,9 @@ Features:
 - **Light / dark theme** — follows your system by default; pin Light or Dark with
   the popup's header button or the System · Light · Dark picker in settings, and
   the choice applies across every extension page.
+- **A one-page welcome on first install** — what's ready now, plus the two opt-in
+  protections as real toggles (both off by default, both changeable any time in
+  settings). It opens once; updates never reopen it.
 
 cleanthis.io allows a set number of scans and files per day per user. The extension
 shows what's left, and pauses instead of retrying when the allowance runs out or the

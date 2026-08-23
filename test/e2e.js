@@ -106,6 +106,18 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
   const { context, cleanup } = await launchWithExtension(EXT_DIR);
   let sw = await worker(context);
 
+  // The fresh harness profile is a genuine first install, so the welcome tab
+  // opens on its own (v0.6.7). Close it before the phases: 1b pairs page
+  // events with clicks and must not grab an unrelated tab.
+  for (let i = 0; i < 15; i++) {
+    const welcomeTab = context.pages().find((p) => /welcome\/welcome\.html/.test(p.url()));
+    if (welcomeTab) {
+      await welcomeTab.close().catch(() => {});
+      break;
+    }
+    await new Promise((r) => setTimeout(r, 200));
+  }
+
   // ── 1. webpage scan ─────────────────────────────────────────
   try {
     const scan = await sw.evaluate(async () => {
@@ -202,6 +214,56 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     await popup.close();
   } catch (err) {
     record("popup UI", false, err.message);
+  }
+
+  // ── 1c. first-run welcome page (v0.6.7) ─────────────────────
+  // The page's two protection toggles are real: they write the same keys the
+  // options page owns, through the same permission flow. (The dev build holds
+  // the optional grant from install, so the flagged toggle completes without
+  // the prompt no harness can click.)
+  try {
+    sw = await worker(context);
+    const extensionId = new URL(sw.url()).host;
+    await sw.evaluate(() => chrome.storage.local.remove(["interceptEnabled", "flaggedEnabled"]));
+
+    const welcome = await context.newPage();
+    await welcome.goto(`chrome-extension://${extensionId}/welcome/welcome.html`, { waitUntil: "load" });
+
+    await welcome.click("#welcome-intercept");
+    const wIntercept = await welcome
+      .waitForFunction(
+        async () => {
+          const pageExt = typeof browser !== "undefined" ? browser : chrome;
+          const { interceptEnabled } = await pageExt.storage.local.get("interceptEnabled");
+          return interceptEnabled === true;
+        },
+        null,
+        { timeout: 5000 }
+      )
+      .then(() => true)
+      .catch(() => false);
+    record("welcome: download-protection toggle enables for real", wIntercept === true);
+
+    await welcome.click("#welcome-flagged");
+    const wFlagged = await welcome
+      .waitForFunction(
+        async () => {
+          const pageExt = typeof browser !== "undefined" ? browser : chrome;
+          const { flaggedEnabled } = await pageExt.storage.local.get("flaggedEnabled");
+          return flaggedEnabled === true;
+        },
+        null,
+        { timeout: 5000 }
+      )
+      .then(() => true)
+      .catch(() => false);
+    record("welcome: flagged toggle enables for real", wFlagged === true);
+
+    await welcome.close();
+    sw = await worker(context);
+    await sw.evaluate(() => chrome.storage.local.remove(["interceptEnabled", "flaggedEnabled", "flaggedList"]));
+  } catch (err) {
+    record("welcome page", false, err.message);
   }
 
   // ── 2. clean a file ─────────────────────────────────────────

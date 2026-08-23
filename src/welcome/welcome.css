@@ -1,0 +1,98 @@
+/* CleanThis — welcome page layout. Tokens from lib/ui.css. */
+
+body {
+  margin: 0;
+  background: var(--ct-bg);
+  color: var(--ct-text);
+  font: 14px/1.55 system-ui, sans-serif;
+}
+
+main {
+  max-width: 640px;
+  margin: 0 auto;
+  padding: 40px 24px 56px;
+}
+
+.hero {
+  text-align: center;
+  margin-bottom: 28px;
+}
+
+.hero h1 {
+  color: var(--ct-ink);
+  font-size: 26px;
+  margin: 14px 0 6px;
+}
+
+.tagline {
+  color: var(--ct-muted);
+  margin: 0 auto 14px;
+  max-width: 46ch;
+}
+
+.pin-tip {
+  display: inline-block;
+  background: var(--ct-accent-tint);
+  color: var(--ct-ink);
+  border-radius: 999px;
+  padding: 6px 14px;
+  font-size: 12.5px;
+  margin: 0;
+}
+
+.card,
+.privacy {
+  background: var(--ct-card);
+  border: 1px solid var(--ct-line);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 14px;
+}
+
+h2 {
+  font-size: 15px;
+  color: var(--ct-ink);
+  margin: 0 0 8px;
+}
+
+.toggle {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  font-weight: 600;
+}
+
+.toggle input {
+  accent-color: var(--ct-primary-strong);
+  width: 16px;
+  height: 16px;
+}
+
+.help {
+  color: var(--ct-muted);
+  font-size: 13px;
+  margin: 8px 0 0;
+}
+
+.status {
+  color: var(--ct-primary-strong);
+}
+
+.privacy {
+  border-color: var(--ct-primary);
+}
+
+.links {
+  margin: 10px 0 0;
+  font-size: 13px;
+}
+
+.links a {
+  color: var(--ct-primary-strong);
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.links a:hover {
+  text-decoration: underline;
+}

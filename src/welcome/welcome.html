@@ -1,0 +1,72 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <script src="../lib/theme.js"></script>
+  <title>Welcome to CleanThis</title>
+  <link rel="stylesheet" href="../lib/ui.css">
+  <link rel="stylesheet" href="welcome.css">
+</head>
+<body>
+  <main>
+    <header class="hero">
+      <img src="../icons/icon-128.png" alt="" width="56" height="56">
+      <h1>CleanThis is in.</h1>
+      <p class="tagline">Clean files of hidden threats and check webpages for scams —
+        processed by cleanthis.io, controlled entirely by you.</p>
+      <p class="pin-tip">Tip: pin CleanThis to the toolbar (puzzle-piece icon → 📌)
+        so a scan is always one click away.</p>
+    </header>
+
+    <section class="card">
+      <h2>Scan any page — ready now</h2>
+      <p class="help">Click the toolbar icon for a safety verdict on the page you're
+        on — security, privacy and legitimacy scores with the same reasons the
+        website's report shows. Or right-click any link and choose
+        <em>Scan with CleanThis</em>. Nothing is ever scanned without your click.</p>
+    </section>
+
+    <section class="card">
+      <h2>Clean risky downloads</h2>
+      <label class="toggle">
+        <input type="checkbox" id="welcome-intercept">
+        <span>Clean matching downloads automatically</span>
+      </label>
+      <p class="help">Off by default. While it is on, the web address of a matching
+        download is sent to cleanthis.io, which fetches and cleans the file and gives
+        you the cleaned copy. You can always take the original instead — nothing is
+        ever blocked outright. Which file types count is a set of checkboxes in
+        settings.</p>
+      <p class="help status" id="intercept-status" hidden></p>
+    </section>
+
+    <section class="card">
+      <h2>Flagged-site warnings</h2>
+      <label class="toggle">
+        <input type="checkbox" id="welcome-flagged">
+        <span>Warn before a known-bad site loads</span>
+      </label>
+      <p class="help">Off by default. Checked on your device against a local copy of
+        cleanthis.io's flagged-site list — the addresses you visit never leave your
+        machine, and no site is ever blocked outright. Turning it on asks for the
+        browser's "tabs" and "webNavigation" permissions in one prompt.</p>
+      <p class="help status" id="flagged-status" hidden></p>
+    </section>
+
+    <section class="privacy">
+      <h2>Private by wiring, not by promise</h2>
+      <p class="help">Nothing is sent unless you ask for it. The extension talks only
+        to cleanthis.io, collects no analytics, and keeps no history of what you
+        visit or clean.</p>
+      <p class="links">
+        <a id="privacy-link" href="https://github.com/therealziggy/cleanthis-extension-chrome/blob/main/PRIVACY.md">Privacy policy</a> ·
+        <a id="settings-link" href="#">All settings</a> ·
+        <a id="site-link" href="#">cleanthis.io</a>
+      </p>
+    </section>
+  </main>
+
+  <script src="../lib/api.js"></script>
+  <script src="welcome.js"></script>
+</body>
+</html>
