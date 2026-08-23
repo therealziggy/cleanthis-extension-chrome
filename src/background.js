@@ -467,8 +467,10 @@ ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === "flaggedEnabled") {
     // The options page just turned warnings on: attach the pre-navigation
     // listener (the permission was granted moments ago) and fetch the list.
+    // Forced: a user flipping the toggle deserves an immediate try even if a
+    // recent background attempt failed.
     syncWebNavListener();
-    refreshFlaggedList()
+    refreshFlaggedList({ force: true })
       .then(() => sendResponse({ ok: true }))
       .catch(() => sendResponse({ ok: false }));
     return true;
@@ -522,10 +524,12 @@ const flagged = self.CleanThisFlagged;
 let flaggedIndex = { version: null, index: null };
 
 let flaggedRefreshInFlight = null;
-function refreshFlaggedList() {
+// A forced call joining an unforced in-flight fetch just joins it — a fetch
+// is happening either way, which is all "force" asks for.
+function refreshFlaggedList(opts) {
   if (!flaggedRefreshInFlight) {
     flaggedRefreshInFlight = flagged
-      .refreshList(ext)
+      .refreshList(ext, opts)
       .finally(() => {
         flaggedRefreshInFlight = null;
       });
@@ -533,10 +537,10 @@ function refreshFlaggedList() {
   return flaggedRefreshInFlight;
 }
 
-async function maybeRefreshFlaggedList() {
+async function maybeRefreshFlaggedList({ force = false } = {}) {
   const stored = await ext.storage.local.get(["flaggedEnabled", flagged.LIST_KEY]);
   if (stored.flaggedEnabled !== true) return;
-  if (flagged.listStale(stored[flagged.LIST_KEY])) await refreshFlaggedList();
+  if (flagged.listStale(stored[flagged.LIST_KEY])) await refreshFlaggedList({ force });
 }
 
 // One navigation crosses BOTH checkpoints below (pre-navigation, then
@@ -735,7 +739,7 @@ async function completeFlaggedIntent() {
     if (!granted) return;
     await ext.storage.local.set({ flaggedEnabled: true });
     syncWebNavListener();
-    await maybeRefreshFlaggedList();
+    await maybeRefreshFlaggedList({ force: true });
   } catch (_) {
     /* the popup path or the next toggle still enables it */
   }

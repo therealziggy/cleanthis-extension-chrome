@@ -86,6 +86,28 @@ test("a 429 starts a cooldown and the next call fails without touching the netwo
   assert.ok(api._cooldownRemaining() > 25000);
 });
 
+test("_noteRateLimit pauses request() without any network call", async () => {
+  stubFetch([]); // any fetch would throw "unexpected fetch call"
+
+  api._noteRateLimit(30000);
+
+  await assert.rejects(() => api.scanUrl("https://example.com", "light"), (err) => {
+    assert.equal(err.code, "cooldown");
+    assert.ok(err.retryAfterMs > 0);
+    return true;
+  });
+  assert.equal(calls.length, 0, "an externally noted 429 must stop calls before the network");
+});
+
+test("_noteRateLimit defaults to a real pause and caps at the maximum", () => {
+  api._noteRateLimit();
+  assert.ok(api._cooldownRemaining() > 30000, "no argument still pauses for a meaningful time");
+
+  api._resetForTests();
+  api._noteRateLimit(999 * 24 * 3600 * 1000);
+  assert.ok(api._cooldownRemaining() <= 24 * 3600 * 1000, "the cap must hold");
+});
+
 test("a 429 carrying the daily-quota code reports quota, not rate limiting", async () => {
   stubFetch([
     tokenOk(),

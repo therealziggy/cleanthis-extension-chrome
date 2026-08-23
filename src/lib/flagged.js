@@ -20,6 +20,11 @@
   const LIST_MAX_AGE_MS = 24 * 60 * 60 * 1000;
   const BYPASS_TTL_MS = 30 * 1000;
   const FETCH_TIMEOUT_MS = 15 * 1000;
+  // A recent FAILED attempt gates unforced refreshes: staleness is re-checked
+  // on every navigation, and an endpoint outage must not turn that into a
+  // retry per page load.
+  const ATTEMPT_KEY = "flaggedListAttemptAt";
+  const ATTEMPT_MIN_GAP_MS = 5 * 60 * 1000;
 
   const OWN_HOST = "cleanthis.io";
 
@@ -195,14 +200,36 @@
   }
 
   // Never throws. 200 replaces the list, 304 just refreshes its age, and any
-  // failure leaves the stored list exactly as it was.
-  async function refreshList(ext) {
+  // failure leaves the stored list exactly as it was — but is remembered, so
+  // an outage backs off instead of retrying on every navigation. `force` is
+  // the user-gesture path (the toggle): it skips the failure gate, never the
+  // shared 429 cooldown — politeness outranks the toggle, because repeated
+  // 429s get an IP firewall-banned server-side.
+  async function refreshList(ext, { force = false } = {}) {
+    if (self.CleanThisApi._cooldownRemaining() > 0) return;
+
     let stored = null;
+    let attemptAt = null;
     try {
-      ({ [LIST_KEY]: stored = null } = await ext.storage.local.get(LIST_KEY));
+      ({ [LIST_KEY]: stored = null, [ATTEMPT_KEY]: attemptAt = null } = await ext.storage.local.get([
+        LIST_KEY,
+        ATTEMPT_KEY,
+      ]));
     } catch (_) {
       /* treated as no list */
     }
+
+    if (!force && Number.isFinite(attemptAt) && Date.now() - attemptAt < ATTEMPT_MIN_GAP_MS) return;
+
+    // Only failures are stamped: a success is followed by 24h of freshness
+    // anyway, and gating successes would change the refresh semantics.
+    const noteFailure = async () => {
+      try {
+        await ext.storage.local.set({ [ATTEMPT_KEY]: Date.now() });
+      } catch (_) {
+        /* the gate is best-effort; the worst case is the old retry behaviour */
+      }
+    };
 
     try {
       const headers = {};
@@ -219,14 +246,30 @@
         clearTimeout(timer);
       }
 
+      if (response.status === 429) {
+        // Not our polite request() wrapper, so feed the shared cooldown by
+        // hand — every endpoint pauses together.
+        const retryAfter = Number(response.headers.get("Retry-After"));
+        self.CleanThisApi._noteRateLimit(
+          Number.isFinite(retryAfter) && retryAfter > 0 ? retryAfter * 1000 : undefined
+        );
+        await noteFailure();
+        return;
+      }
       if (response.status === 304 && stored) {
         await ext.storage.local.set({ [LIST_KEY]: { ...stored, fetchedAt: Date.now() } });
         return;
       }
-      if (!response.ok) return;
+      if (!response.ok) {
+        await noteFailure();
+        return;
+      }
 
       const body = await response.json();
-      if (!body || !Array.isArray(body.entries)) return;
+      if (!body || !Array.isArray(body.entries)) {
+        await noteFailure();
+        return;
+      }
       await ext.storage.local.set({
         [LIST_KEY]: {
           version: body.version,
@@ -238,7 +281,8 @@
         },
       });
     } catch (_) {
-      /* offline or mid-flight failure: the stored list stays authoritative */
+      // Offline or mid-flight failure: the stored list stays authoritative.
+      await noteFailure();
     }
   }
 

@@ -267,6 +267,14 @@
     }
   }
 
+  // Lets a caller that saw a 429 outside request() — the flagged-list fetch,
+  // which manages its own ETag plumbing — feed the shared cooldown, so every
+  // endpoint pauses together rather than each discovering the limit alone.
+  function noteRateLimit(retryAfterMs) {
+    const ms = Number.isFinite(retryAfterMs) && retryAfterMs > 0 ? retryAfterMs : DEFAULT_COOLDOWN_MS;
+    startCooldown(Math.min(ms, MAX_COOLDOWN_MS));
+  }
+
   const api = {
     baseUrl: "https://cleanthis.io",
     ApiError,
@@ -279,6 +287,7 @@
     resolveUrl,
     getLastQuota: (bucket) => lastQuota[bucket] || null,
     _cooldownRemaining: cooldownRemaining,
+    _noteRateLimit: noteRateLimit,
     _resetForTests() {
       cooldownUntil = 0;
       lastQuota.scan = null;

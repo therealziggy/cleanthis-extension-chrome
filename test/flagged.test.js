@@ -202,6 +202,9 @@ function response({ status = 200, body = null, etag = null } = {}) {
 
 test.beforeEach(() => {
   api.baseUrl = "https://cleanthis.io";
+  // The 429 cooldown is module-global in api.js; a test that starts one must
+  // never leak it into its neighbours.
+  api._resetForTests();
 });
 
 test("refreshList: 200 replaces the stored list and keeps the etag", async () => {
@@ -239,6 +242,65 @@ test("refreshList: a failing fetch keeps the stored list untouched", async () =>
   await flagged.refreshList(ext);
   const { flaggedList } = await ext.storage.local.get("flaggedList");
   assert.deepStrictEqual(flaggedList, old);
+});
+
+test("refreshList: a failed attempt is not retried within the gap", async () => {
+  const ext = fakeExt();
+  let fetches = 0;
+  global.fetch = async () => {
+    fetches++;
+    throw new Error("offline");
+  };
+
+  await flagged.refreshList(ext);
+  assert.equal(fetches, 1);
+
+  // The per-navigation staleness top-up must not retry an outage on every
+  // page load.
+  await flagged.refreshList(ext);
+  assert.equal(fetches, 1, "no retry within the attempt gap");
+
+  // POSITIVE CONTROL 1: the user-gesture path (toggle-on) retries at once.
+  await flagged.refreshList(ext, { force: true });
+  assert.equal(fetches, 2, "a forced refresh retries immediately");
+
+  // POSITIVE CONTROL 2: once the gap has elapsed, unforced refreshes retry —
+  // the gate discriminates, it doesn't switch refreshing off.
+  await ext.storage.local.set({ flaggedListAttemptAt: Date.now() - 6 * 60 * 1000 });
+  await flagged.refreshList(ext);
+  assert.equal(fetches, 3, "the gap elapsing re-opens the gate");
+});
+
+test("refreshList: a success does not gate the next refresh", async () => {
+  const ext = fakeExt();
+  let fetches = 0;
+  global.fetch = async () => {
+    fetches++;
+    return response({ body: { version: fetches, entries: [] } });
+  };
+
+  await flagged.refreshList(ext);
+  await flagged.refreshList(ext);
+  assert.equal(fetches, 2, "the gate is failure backoff, not a rate limit on success");
+});
+
+test("refreshList: a 429 starts the shared cooldown and later refreshes stay local", async () => {
+  const ext = fakeExt();
+  let fetches = 0;
+  global.fetch = async () => {
+    fetches++;
+    return response({ status: 429 });
+  };
+
+  await flagged.refreshList(ext);
+  assert.equal(fetches, 1);
+  assert.ok(api._cooldownRemaining() > 0, "a 429 on the list endpoint must start the shared cooldown");
+
+  // Even a forced refresh respects the cooldown — politeness outranks the
+  // toggle (ten 429s in five minutes gets an IP firewall-banned).
+  await ext.storage.local.set({ flaggedListAttemptAt: 1 });
+  await flagged.refreshList(ext, { force: true });
+  assert.equal(fetches, 1, "no call during the shared cooldown");
 });
 
 test("listStale flags lists older than a day", () => {
