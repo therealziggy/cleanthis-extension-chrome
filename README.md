@@ -31,6 +31,10 @@ Features:
   with the same reasons and wording the website's report shows. Need more than a
   quick look? A **Deep scan** link hands the page off to the scanner on
   cleanthis.io with everything pre-filled — you just press Scan there.
+- **Right-click scanning** — right-click any link (or select a web address as text,
+  even inside a text box) and choose *Scan with CleanThis*: the scanner on
+  cleanthis.io opens with the address pre-filled — nothing runs until you press
+  Scan there. If the selection isn't a web address, a notification says so.
 - **Download protection** (opt-in, **off by default**) — intercepts risky file
   downloads, has cleanthis.io fetch and sanitize the file server-side, and hands you
   the cleaned copy instead. Every failure path offers a one-click "download the

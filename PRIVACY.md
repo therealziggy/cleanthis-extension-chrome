@@ -15,6 +15,7 @@ Nothing is sent unless you ask for it, or you turn on download protection yourse
 | **Clean a file** | The file you picked | Only when you pick it |
 | **Clean this file** (a document you're viewing) | The web address of the document | Only when you click *Clean this file* / *Clean it first* |
 | **Scan this page** | The web address of the active tab | Only when you click *Scan this page* |
+| **Scan with CleanThis** (right-click menu) | The link or selected text you right-clicked | Only when you click the menu item |
 | **Download protection** | The web address of a matching download | Only while you have it switched on |
 | **Ask before opening document links** | Nothing | The check is on your device; the address only leaves if you then choose to clean it |
 
@@ -76,6 +77,8 @@ files are processed and then deleted shortly afterwards, and they are not shared
 - **storage** — to keep your settings on your device.
 - **notifications** — to tell you a file is ready, or that something went wrong.
 - **activeTab** — to read the address of the current tab when you click *Scan this page*.
+- **contextMenus** — to offer *Scan with CleanThis* when you right-click a link or
+  selected text. The menu item reads nothing and sends nothing until you click it.
 - **access to `cleanthis.io`** — to make the API requests the extension exists for.
 
 The extension asks for no access to other websites.
