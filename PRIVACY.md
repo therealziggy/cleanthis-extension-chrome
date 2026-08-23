@@ -1,6 +1,6 @@
 # Privacy policy — CleanThis browser extension
 
-_Last updated: 12 August 2026_
+_Last updated: 24 August 2026_
 
 The extension is a client for [cleanthis.io](https://cleanthis.io). It has no servers,
 accounts, or storage of its own beyond your settings, and it talks to no one except
@@ -45,6 +45,14 @@ revoke the permissions from your browser's extension settings at any time.
 
 A warning never blocks a site outright: "Proceed anyway" always loads it.
 
+**What the check covers, honestly:** full-page addresses as you navigate (and, on
+flagged sites, the specific links known to be dangerous). It does not look inside
+pages — content a page embeds from elsewhere (frames) is not checked — and file
+downloads are not checked against this list; download protection above is its own,
+separate feature. When a warning fires, it replaces the page in your tab; on a site
+you had already started loading, the site may have seen the initial request before
+the warning took its place.
+
 ## What is never sent
 
 - Your browsing history. The extension does not watch pages you visit, and has no
@@ -54,16 +62,29 @@ A warning never blocks a site outright: "Proceed anyway" always loads it.
 
 ## What is stored, and where
 
-Everything below is kept in your browser's own extension storage, on your device.
-Nothing is synced anywhere by the extension, and none of it is sent to cleanthis.io.
+Everything below is kept by your browser on this device. Nothing is synced anywhere
+by the extension, and none of it is sent to cleanthis.io.
 
-- Your settings: the download-protection toggle, cleaning level, and file-type list.
+- Your settings: the download-protection, flagged-site and document-ask toggles, the
+  cleaning level, the file-type list, and your theme choice (System / Light / Dark).
 - The most recent daily-allowance figures.
+- If the service has asked us to slow down: the time that pause ends, so the
+  extension can stay polite without asking twice.
+- Configuration downloaded from cleanthis.io: the file-type catalogue, and — only
+  while flagged-site warnings are on — the flagged-site list itself (irreversible
+  fingerprints, never addresses) plus when it was last fetched.
 - While download protection is on: the web address of a download currently being
   cleaned (so an interrupted clean can offer you the original), and addresses you
   chose to download untouched. Both are short-lived — each entry is discarded once
   the download it refers to is dealt with, and they are cleared when you close the
   browser. No history of past downloads is kept.
+- While a clean you started is still running or waiting to be saved: the job's id
+  and the file's name, so a closed window can still hand you the result. Cleared as
+  soon as the job is dealt with, and when you close the browser.
+- While flagged-site warnings are on: the hostname you just chose "Proceed anyway"
+  for (kept for half a minute), and — for compromised-but-legitimate sites — the
+  hostnames already shown the one-time heads-up, so it isn't repeated. Both live
+  only until you close the browser.
 
 ## What cleanthis.io does with what it receives
 

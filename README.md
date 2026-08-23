@@ -52,6 +52,9 @@ Features:
   links on them still get the full warning page. Turning it on asks for the
   browser's "tabs" and "webNavigation" permissions in one prompt. When a warned
   link points at a document, the warning page also offers **"Clean it first"**.
+  The check covers full-page addresses as you navigate — it doesn't look inside
+  pages (framed content isn't checked), and downloads are download protection's
+  job, not this list's.
 - **Ask before opening document links** (opt-in, **off by default**) — a quick
   heads-up before a link that goes straight to a document (PDF, Word, Zip and the
   like) opens, offering the rebuilt copy first. The check happens on your device;
