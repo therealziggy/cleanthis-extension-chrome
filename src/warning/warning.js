@@ -120,6 +120,43 @@ document.getElementById("back").addEventListener("click", () => {
   addEventListener("pagehide", () => clearTimeout(fallback), { once: true });
 });
 
+// ── report a mistake (flagged mode only) ──────────────────────
+// The wall's dispute lane: an optional note goes to the same review queue as
+// the website's "Report result" button. Nothing is sent until the user
+// presses Send — the same rule as everything else on this page. The document
+// heads-up is not a list verdict, so it carries no report lane.
+if (kind === "flagged" && host && target) {
+  const wrap = document.getElementById("report-wrap");
+  const link = document.getElementById("report-link");
+  const panel = document.getElementById("report-panel");
+  const send = document.getElementById("report-send");
+  const status = document.getElementById("report-status");
+  wrap.hidden = false;
+  link.addEventListener("click", () => {
+    panel.hidden = !panel.hidden;
+    link.setAttribute("aria-expanded", String(!panel.hidden));
+    if (!panel.hidden) document.getElementById("report-note").focus();
+  });
+  send.addEventListener("click", async () => {
+    send.disabled = true;
+    status.textContent = "Sending…";
+    status.classList.remove("ok");
+    try {
+      await self.CleanThisApi.reportScan({
+        url: target,
+        reportType: "too_harsh",
+        note: document.getElementById("report-note").value,
+      });
+      status.textContent = "Thanks — we'll take a look.";
+      status.classList.add("ok");
+      document.getElementById("report-note").disabled = true;
+    } catch (err) {
+      status.textContent = (err && err.message) || "Couldn't send. Please try again.";
+      send.disabled = false;
+    }
+  });
+}
+
 const proceed = document.getElementById("proceed");
 if (!host || !target) {
   proceed.hidden = true;

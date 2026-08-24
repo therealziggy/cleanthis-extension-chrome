@@ -221,6 +221,22 @@
     });
   }
 
+  // "Report a mistake" from the flagged-site warning page — the same report
+  // the website's "Report result" button sends, so it lands in the same
+  // review queue. tier/verdict identify where it came from. No quota bucket:
+  // the server runs its own daily cap for reports.
+  async function reportScan({ url, reportType = "too_harsh", note } = {}) {
+    const token = await getFormToken("report-scan");
+    const body = { url, tier: "extension", verdict: "walled", reportType };
+    const cleanNote = typeof note === "string" ? note.trim() : "";
+    if (cleanNote) body.note = cleanNote.slice(0, 500);
+    return request("/api/report-scan", {
+      method: "POST",
+      headers: formHeaders(token, { "Content-Type": "application/json" }),
+      body: JSON.stringify(body),
+    });
+  }
+
   // The server hands back download links as absolute URLs, but a relative path
   // is just as valid a shape for it to use — resolve either against the base
   // rather than assuming one and building a broken URL from the other.
@@ -282,6 +298,7 @@
     scanUrl,
     sanitizeFile,
     sanitizeUrl,
+    reportScan,
     getJob,
     waitForJob,
     resolveUrl,

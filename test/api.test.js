@@ -265,6 +265,37 @@ test("sanitizeUrl surfaces a blocked source instead of a job", async () => {
   assert.match(result.sourceWarning, /flagged/);
 });
 
+// ── report a mistake ──────────────────────────────────────────
+
+test("reportScan posts the report with a report-scan form token", async () => {
+  stubFetch([jsonResponse({ token: "tok-r", ttl: 300 }), jsonResponse({ ok: true })]);
+
+  const out = await api.reportScan({
+    url: "https://walled.example/x?q=1",
+    reportType: "too_harsh",
+    note: "  this is our own site  ",
+  });
+
+  assert.equal(out.ok, true);
+  assert.match(calls[0].url, /\/api\/form-token\?purpose=report-scan$/);
+  assert.match(calls[1].url, /\/api\/report-scan$/);
+  const headers = calls[1].options.headers;
+  assert.equal(headers["X-Form-Token"], "tok-r");
+  assert.equal(headers["X-Form-Hp"], "");
+  assert.deepEqual(JSON.parse(calls[1].options.body), {
+    url: "https://walled.example/x?q=1",
+    tier: "extension",
+    verdict: "walled",
+    reportType: "too_harsh",
+    note: "this is our own site",
+  });
+
+  // An empty note is omitted entirely, not sent as "".
+  stubFetch([jsonResponse({ token: "tok-r2", ttl: 300 }), jsonResponse({ ok: true })]);
+  await api.reportScan({ url: "https://walled.example/", reportType: "too_harsh", note: "   " });
+  assert.equal(JSON.parse(calls[1].options.body).note, undefined);
+});
+
 // ── download links ────────────────────────────────────────────
 
 test("resolveUrl accepts both the absolute links the server sends and relative paths", () => {

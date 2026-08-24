@@ -35,6 +35,20 @@
         <button id="clean-first" type="button" class="quiet" hidden>Clean it first</button>
         <button id="proceed" type="button" class="quiet">Proceed anyway</button>
       </div>
+
+      <div class="report" id="report-wrap" hidden>
+        <button id="report-link" type="button" class="report-toggle" aria-expanded="false">
+          Think this warning is a mistake? Report it
+        </button>
+        <div class="report-panel" id="report-panel" hidden>
+          <textarea id="report-note" maxlength="500" rows="2"
+            placeholder="Optional — tell us why (please don't include personal info)."></textarea>
+          <div class="report-actions">
+            <button id="report-send" type="button" class="quiet">Send report</button>
+            <span id="report-status" role="status"></span>
+          </div>
+        </div>
+      </div>
       <p class="fineprint" id="fineprint">
         Proceeding loads the site once. You'll be warned again next time.
       </p>

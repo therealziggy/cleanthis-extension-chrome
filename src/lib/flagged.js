@@ -17,7 +17,10 @@
 (() => {
   const LIST_KEY = "flaggedList";
   const BYPASS_KEY = "flaggedBypass";
-  const LIST_MAX_AGE_MS = 24 * 60 * 60 * 1000;
+  // One hour, matching the server's own memo window for the list — refreshing
+  // faster only re-downloads the same memoized payload, and ETag/304 makes the
+  // hourly check nearly free. End-to-end staleness worst case ≈ two hours.
+  const LIST_MAX_AGE_MS = 60 * 60 * 1000;
   const BYPASS_TTL_MS = 30 * 1000;
   const FETCH_TIMEOUT_MS = 15 * 1000;
   // A recent FAILED attempt gates unforced refreshes: staleness is re-checked

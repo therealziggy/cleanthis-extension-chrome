@@ -109,3 +109,55 @@ h1 {
   color: var(--ct-muted);
   font-size: 11px;
 }
+
+/* "Report a mistake" — the wall's quiet dispute lane. */
+.report {
+  margin: 14px 0 0;
+}
+
+.report-toggle {
+  padding: 0;
+  border: none;
+  background: none;
+  color: var(--ct-muted);
+  font-size: 12px;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+.report-toggle:hover {
+  color: var(--ct-text);
+}
+
+.report-panel {
+  margin-top: 10px;
+}
+
+.report-panel textarea {
+  width: 100%;
+  box-sizing: border-box;
+  resize: vertical;
+  padding: 8px 10px;
+  border: 1px solid var(--ct-line);
+  border-radius: 8px;
+  background: var(--ct-card);
+  color: var(--ct-text);
+  font: inherit;
+  font-size: 13px;
+}
+
+.report-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 8px;
+}
+
+#report-status {
+  color: var(--ct-muted);
+  font-size: 12px;
+}
+
+#report-status.ok {
+  color: var(--ct-primary-strong);
+}

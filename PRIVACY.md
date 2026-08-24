@@ -17,6 +17,7 @@ Nothing is sent unless you ask for it, or you turn on download protection yourse
 | **Scan this page** | The web address of the active tab | Only when you click *Scan this page* |
 | **Scan with CleanThis** (right-click menu) | The link or selected text you right-clicked | Only when you click the menu item |
 | **Download protection** | The web address of a matching download | Only while you have it switched on |
+| **Report a mistake** (flagged-site warning page) | The blocked address and your optional note | Only when you press Send |
 | **Ask before opening document links** | Nothing | The check is on your device; the address only leaves if you then choose to clean it |
 
 Download protection is **off until you turn it on**. While it is on, the address of a
@@ -43,7 +44,10 @@ in an instant, so the check has to happen before the site answers, or the danger
 address is never seen at all. Turning the feature off stops all checking; you can also
 revoke the permissions from your browser's extension settings at any time.
 
-A warning never blocks a site outright: "Proceed anyway" always loads it.
+A warning never blocks a site outright: "Proceed anyway" always loads it. And every
+warning page carries a **"Report a mistake"** lane — sending one is the only time a
+flagged address leaves your device, because you asked it to; the report goes to
+human review.
 
 **What the check covers, honestly:** full-page addresses as you navigate (and, on
 flagged sites, the specific links known to be dangerous). It does not look inside

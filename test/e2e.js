@@ -625,6 +625,27 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     const shownHost = await page5.textContent("#host");
     record("a flagged page is interrupted by the warning", /e2e-flagged\.example/.test(shownHost || ""), shownHost);
 
+    // Report a mistake (v0.6.8): the wall's dispute lane — a real round trip
+    // to /api/report-scan on the local server, the same endpoint the
+    // website's "Report result" button uses. The success copy only renders
+    // on the server's {ok:true}, so this can't pass without the insert.
+    await page5.click("#report-link");
+    await page5.fill("#report-note", "e2e fixture: this is our own site");
+    await page5.click("#report-send");
+    const reportOk = await page5
+      .waitForFunction(
+        () => /take a look/.test(document.getElementById("report-status")?.textContent || ""),
+        null,
+        { timeout: 15000 }
+      )
+      .then(() => true)
+      .catch(() => false);
+    record(
+      "report-a-mistake reaches the review queue",
+      reportOk === true,
+      await page5.textContent("#report-status").catch(() => "")
+    );
+
     await page5.click("#proceed");
     await urlSettles(page5, new RegExp(`^http:\/\/e2e-flagged\\.example:${FILE_PORT}\/$`));
     const bodyText = await page5.textContent("body");

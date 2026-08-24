@@ -303,8 +303,12 @@ test("refreshList: a 429 starts the shared cooldown and later refreshes stay loc
   assert.equal(fetches, 1, "no call during the shared cooldown");
 });
 
-test("listStale flags lists older than a day", () => {
+test("listStale flags lists older than an hour", () => {
+  // The server memoizes the list for up to an hour, so refreshing faster buys
+  // nothing; an hour keeps end-to-end staleness ≈ two hours at the cost of
+  // one conditional GET per active hour.
   assert.strictEqual(flagged.listStale({ fetchedAt: Date.now() - 1000 }), false);
-  assert.strictEqual(flagged.listStale({ fetchedAt: Date.now() - 25 * 3600 * 1000 }), true);
+  assert.strictEqual(flagged.listStale({ fetchedAt: Date.now() - 50 * 60 * 1000 }), false);
+  assert.strictEqual(flagged.listStale({ fetchedAt: Date.now() - 2 * 3600 * 1000 }), true);
   assert.strictEqual(flagged.listStale(undefined), true);
 });
