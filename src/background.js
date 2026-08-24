@@ -802,14 +802,18 @@ async function warnDocTab(tabId, url, via) {
   }
 }
 
-// The hybrid's soft tier (2026-08-20): pages on a compromised-but-legitimate
-// site get a one-time heads-up notification, never a wall.
+// The hybrid's soft tier (2026-08-20): a one-time heads-up notification,
+// never a wall. Two flavours since v0.6.9 — a hacked-but-legitimate site,
+// and a site the list knows only for spam promotion (the wall is reserved
+// for sites reported as dangerous in themselves; the shipped category says
+// which flavour this is).
 async function softHeadsUp(hit) {
   if (await flagged.softAlreadyShown(ext, hit.host)) return;
-  await notify(
-    "Heads up about this site",
-    `Pages on ${hit.host} have been reported as compromised. Be careful with downloads and login forms.`
-  );
+  const message =
+    hit.cat === "compromised"
+      ? `Pages on ${hit.host} have been reported as compromised. Be careful with downloads and login forms.`
+      : `${hit.host} is known mainly for being promoted through spam campaigns. Nothing is blocked — just be careful with anything it offers.`;
+  await notify("Heads up about this site", message);
 }
 
 // `via` tells the warning page how the flagged URL sits in history: a

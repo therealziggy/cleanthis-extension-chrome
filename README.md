@@ -47,9 +47,11 @@ Features:
   a known-bad site loads, powered by a local copy of CleanThis's flagged-site list.
   Checks happen entirely **on your device**: the addresses you visit are never sent
   anywhere, and nothing is scanned automatically. Never a hard block — "Proceed
-  anyway" is always there. Hacked-but-legitimate sites get a gentler treatment: a
-  one-time heads-up notification instead of a wall, while the specific dangerous
-  links on them still get the full warning page. Turning it on asks for the
+  anyway" is always there. The full-page wall is reserved for sites reported as
+  dangerous in themselves; hacked-but-legitimate sites and sites known only for
+  being promoted through spam get a gentler treatment — a one-time dismissible
+  heads-up instead of a wall — while the specific dangerous links on them still
+  get the full warning page. Turning it on asks for the
   browser's "tabs" and "webNavigation" permissions in one prompt. When a warned
   link points at a document, the warning page also offers **"Clean it first"**.
   The check covers full-page addresses as you navigate — it doesn't look inside

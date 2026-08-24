@@ -357,6 +357,35 @@ function record(name, ok, detail) {
     outlivesToast.started === "https://example.com/toast.pdf" && outlivesToast.clearedAfterUse === true
   );
 
+  // Soft heads-ups say WHY (v0.6.9): a hacked-but-legit site and a site the
+  // list knows only for spam promotion get different wording — same
+  // dismissible, never-a-wall treatment either way.
+  const softCopy = await sw.evaluate(async () => {
+    const store = chrome.storage.session || chrome.storage.local;
+    await store.remove("softNotifiedHosts");
+    const notes = [];
+    const realNotify = chrome.notifications.create;
+    chrome.notifications.create = (id, options, cb) => {
+      notes.push(options.message);
+      if (cb) cb();
+    };
+    await self.softHeadsUp({ level: "soft", host: "bakery.example", cat: "compromised" });
+    await self.softHeadsUp({ level: "soft", host: "promoted.example", cat: "spam" });
+    chrome.notifications.create = realNotify;
+    await store.remove("softNotifiedHosts");
+    return notes;
+  });
+  record(
+    "soft heads-up: compromised wording for hacked sites",
+    /compromised/.test(softCopy[0] || ""),
+    softCopy[0]
+  );
+  record(
+    "soft heads-up: spam-promotion wording for promoted sites",
+    /spam campaigns/.test(softCopy[1] || "") && !/compromised/.test(softCopy[1] || ""),
+    softCopy[1]
+  );
+
   // Page-job handoff: a clean started on the clean page must reach the user
   // even if the worker died while the page was open (the worker's copy of the
   // handoff dies with it) and the page closed before its reconnect landed.
