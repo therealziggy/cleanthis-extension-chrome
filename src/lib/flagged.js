@@ -108,9 +108,14 @@
     };
   }
 
-  // Most-specific match wins: an exact dangerous link is a WALL even when its
-  // host is only soft-tier (the hacked-bakery hybrid); then wall hosts; then
-  // soft hosts. Returns {level, host, cat, seen} or null.
+  // Most-specific match wins. The exact-link tier is checked first, so a
+  // dangerous link is a WALL even when its host is only soft-tier (the
+  // hacked-bakery hybrid). Then the host labels are walked from the fullest
+  // name outwards and the FIRST listed candidate answers, whichever tier it
+  // sits in — so specificity governs the walk, not severity, and a soft entry
+  // on a subdomain answers before a wall entry on its parent domain. If that
+  // ever needs to flip, walk every candidate against `wall` before touching
+  // `soft`. Returns {level, host, cat, seen} or null.
   async function check(url, indexes) {
     if (!indexes) return null;
     const host = canonicalHost(url);

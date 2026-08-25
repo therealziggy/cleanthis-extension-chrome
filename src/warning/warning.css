@@ -133,6 +133,15 @@ h1 {
   margin-top: 10px;
 }
 
+/* The page above says the address never left the device, which is true of the
+   check itself — this says plainly that choosing to report is the one thing
+   that sends it. */
+.report-what {
+  margin: 0 0 8px;
+  color: var(--ct-muted);
+  font-size: 11px;
+}
+
 .report-panel textarea {
   width: 100%;
   box-sizing: border-box;
