@@ -7,7 +7,7 @@ const assert = require("node:assert");
 
 global.self = globalThis;
 require("../src/lib/intercept.js");
-const { decide, extOf, DEFAULT_EXTS } = self.CleanThisIntercept;
+const { decide, extOf, DEFAULT_EXTS, isLocalAddress } = self.CleanThisIntercept;
 
 const BASE = "https://cleanthis.io";
 const ON = { interceptEnabled: true, interceptExts: ["pdf", "docx", "zip"] };
@@ -92,6 +92,49 @@ test("downloads from this machine or this network are left alone", () => {
 test("public addresses that merely look similar are still intercepted", () => {
   for (const url of ["https://172.32.0.1/a.pdf", "https://11.0.0.1/a.pdf", "https://notlocal.com/a.pdf"]) {
     assert.equal(decide({ url }, ON, NONE, BASE).intercept, true, url);
+  }
+});
+
+test("a download from an IPv6 address is left alone", () => {
+  // A download URL written as a raw IPv6 address is almost always a box on the
+  // user's own network — a NAS, a router, a printer. Stepping in would cancel
+  // their download and post an internal address to a service that could never
+  // reach it, so every v6 literal is left alone, public ones included.
+  for (const url of [
+    "http://[fd00::42]/payroll.pdf", // unique-local: the LAN NAS
+    "http://[fc00::1]/report.pdf",
+    "http://[fe80::1]/report.pdf", // link-local
+    "http://[::]/report.pdf", // unspecified
+    "http://[::ffff:127.0.0.1]/report.pdf", // loopback wearing a v6 coat
+    "http://[2606:4700:4700::1111]/report.pdf", // public, and still left alone
+  ]) {
+    const result = decide({ url }, ON, NONE, BASE);
+    assert.equal(result.intercept, false, url);
+    assert.equal(result.reason, "local-address", url);
+  }
+  // The guard never sees the address as typed: new URL() rewrites it first.
+  assert.equal(new URL("http://[::ffff:127.0.0.1]/x").hostname, "[::ffff:7f00:1]");
+  assert.equal(isLocalAddress("[::ffff:7f00:1]"), true);
+});
+
+test("widening the IPv6 rule did not widen everything else", () => {
+  // Positive control: these answers must be identical before and after the v6
+  // fix, or the test above is passing for the wrong reason.
+  for (const host of [
+    "127.0.0.1",
+    "[::1]",
+    "10.0.0.5",
+    "192.168.1.10",
+    "172.16.4.4",
+    "169.254.1.1",
+    "localhost",
+    "printer.local",
+    "nas",
+  ]) {
+    assert.equal(isLocalAddress(host), true, host);
+  }
+  for (const host of ["example.com", "cleanthis.io", "172.32.0.1", "11.0.0.1", "notlocal.com"]) {
+    assert.equal(isLocalAddress(host), false, host);
   }
 });
 

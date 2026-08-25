@@ -60,7 +60,14 @@
   // download for nothing and send an internal address off the machine.
   function isLocalAddress(host) {
     if (host === "localhost" || host.endsWith(".localhost") || host.endsWith(".local")) return true;
-    if (host === "::1" || host === "[::1]") return true;
+    // Any IPv6 literal, bracketed ([fd00::1], [::1]) or bare. Only ::1 is
+    // strictly this machine, but an address written out in v6 in a download
+    // link is nearly always a box on the user's own network — a NAS, a router,
+    // a printer — and the two mistakes cost very different things: calling a
+    // public v6 host local costs nothing (the download happens exactly as it
+    // would have), calling a LAN one public costs the user their file.
+    // Callers pass a hostname, never host:port — a port would read as v6 here.
+    if (host.includes(":") || host.startsWith("[")) return true;
     const v4 = host.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
     if (v4) {
       const [a, b] = [Number(v4[1]), Number(v4[2])];
@@ -70,12 +77,17 @@
       if (a === 169 && b === 254) return true;
     }
     // Bare hostnames with no dot are intranet names (\\server\share, http://nas).
-    if (!host.includes(".") && !host.includes(":")) return true;
+    if (!host.includes(".")) return true;
     return false;
   }
 
-  // A link carrying a password, or a one-time signed link, is the user's own
-  // secret. Handing it to a service that would re-fetch it is not our call.
+  // A link with sign-in details written into it — https://user:secret@host/file
+  // — is the user's own secret, and handing it to a service that would re-fetch
+  // it is not our call. Only that part of the address is checked: a signed or
+  // one-time link carrying its token in the query string is indistinguishable
+  // from any other link, and travels with the address like the rest of it.
+  // Sending the address of a matching download is the feature, and PRIVACY.md
+  // says so.
   function carriesCredentials(url) {
     try {
       const parsed = new URL(url);
