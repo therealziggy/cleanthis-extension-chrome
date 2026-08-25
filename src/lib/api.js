@@ -240,10 +240,21 @@
   // The server hands back download links as absolute URLs, but a relative path
   // is just as valid a shape for it to use — resolve either against the base
   // rather than assuming one and building a broken URL from the other.
+  //
+  // Whatever comes out of here goes straight to downloads.download() and
+  // tabs.create(), and downloads.download is NOT confined by the manifest's
+  // host permissions — so the only link we act on is one on our own origin.
+  // Anything else is refused rather than fetched; every caller reads null as
+  // "no usable link". The test is same-ORIGIN rather than "must be https"
+  // because the dev build's base is http://localhost:3000, and an origin
+  // comparison rules out javascript:/data:/file: for free (their origin is
+  // "null") along with a plain-http downgrade of the real host.
   function resolveUrl(pathOrUrl) {
     if (!pathOrUrl) return null;
     try {
-      return new URL(pathOrUrl, api.baseUrl).href;
+      const resolved = new URL(pathOrUrl, api.baseUrl);
+      if (resolved.origin !== new URL(api.baseUrl).origin) return null;
+      return resolved.href;
     } catch (_) {
       return null;
     }

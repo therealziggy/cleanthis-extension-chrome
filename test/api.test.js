@@ -318,6 +318,44 @@ test("resolveUrl accepts both the absolute links the server sends and relative p
   assert.equal(api.resolveUrl(""), null);
 });
 
+test("resolveUrl refuses anything that resolves off our own origin", () => {
+  // What comes back from here is handed straight to downloads.download() and
+  // tabs.create(). Only the base's own origin is a link we are willing to act
+  // on, so a response that points somewhere else is refused rather than
+  // fetched — the callers all read null as "no usable link".
+  const previous = api.baseUrl;
+  api.baseUrl = "https://cleanthis.io";
+  try {
+    assert.equal(api.resolveUrl("https://evil.example/payload"), null);
+    assert.equal(api.resolveUrl("//evil.example/payload"), null, "protocol-relative link escaped the origin");
+    assert.equal(api.resolveUrl("http://cleanthis.io/api/download/j1"), null, "scheme downgrade allowed");
+    assert.equal(api.resolveUrl("https://cleanthis.io.evil.example/x"), null, "suffix look-alike allowed");
+    assert.equal(api.resolveUrl("javascript:alert(1)"), null);
+    assert.equal(api.resolveUrl("data:text/html,<script>alert(1)</script>"), null);
+    assert.equal(api.resolveUrl("file:///etc/passwd"), null);
+
+    // Positive control: the shapes the server actually uses still resolve, so
+    // a null above means "refused", never "resolveUrl stopped working".
+    assert.equal(
+      api.resolveUrl("https://cleanthis.io/api/download/j1?sig=x"),
+      "https://cleanthis.io/api/download/j1?sig=x"
+    );
+    assert.equal(api.resolveUrl("/api/download/j1"), "https://cleanthis.io/api/download/j1");
+
+    // The dev build's base is plain http on localhost — the rule is
+    // same-origin, not https-only, or every harness download would break.
+    api.baseUrl = "http://localhost:3000";
+    assert.equal(
+      api.resolveUrl("http://localhost:3000/api/download/j1"),
+      "http://localhost:3000/api/download/j1"
+    );
+    assert.equal(api.resolveUrl("/api/download/j1"), "http://localhost:3000/api/download/j1");
+    assert.equal(api.resolveUrl("http://localhost:3001/api/download/j1"), null, "a different port is a different origin");
+  } finally {
+    api.baseUrl = previous;
+  }
+});
+
 // ── job polling ───────────────────────────────────────────────
 
 test("waitForJob polls until the job reaches a terminal state", async () => {
