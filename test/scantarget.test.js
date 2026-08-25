@@ -3,6 +3,9 @@
 // selectionText arrives as whatever the user swept up: wrapping quotes and
 // punctuation, a bare domain with no scheme, an email, prose. resolve() says
 // yes only to something that is unambiguously a public http(s) address.
+//
+// "Public" is enforced with intercept.isLocalAddress, so scantarget.js needs
+// intercept.js loaded first — the same order both background load paths use.
 
 "use strict";
 
@@ -10,6 +13,7 @@ const test = require("node:test");
 const assert = require("node:assert");
 
 global.self = globalThis;
+require("../src/lib/intercept.js");
 require("../src/lib/scantarget.js");
 const { resolve } = self.CleanThisScanTarget;
 
@@ -74,6 +78,39 @@ test("bare candidates must look like a public dotted host", () => {
   no("localhost:3000");
   no("user@example.com"); // an email is not a site
   no("example"); // no dot
+});
+
+// cleanthis.io fetches the page from its own location, so a private address is
+// a guaranteed dead end: the handoff tab opens, the scan fails, the user is out
+// a tab. Refusing here gets them the "couldn't find a web address" notification
+// instead. Same rule the other two call sites already apply (docs.js, flagged.js).
+test("local and private addresses are refused — explicit scheme", () => {
+  no("http://10.0.0.5/admin");
+  no("http://192.168.1.1/setup");
+  no("http://127.0.0.1:8080/x");
+  no("http://172.16.0.1/x");
+  no("http://169.254.169.254/latest/meta-data"); // link-local
+  no("https://nas.local/share/secret.pdf");
+  no("http://router.localhost/");
+});
+
+test("local and private addresses are refused — bare text", () => {
+  no("nas.local/share");
+  no("10.0.0.5/admin");
+  no("192.168.1.1/setup");
+  no("127.0.0.1:8080/x");
+});
+
+// Guard rails on the rule above: it must reject PRIVATE addresses only. A
+// public IP literal and a userinfo-carrying host are core phishing shapes the
+// scanner exists to analyse — see the explicit-scheme test above.
+test("the local rule does not swallow public hosts", () => {
+  ok("https://1.2.3.4/login", "https://1.2.3.4/login"); // public IP literal
+  ok("http://8.8.8.8/x", "http://8.8.8.8/x");
+  ok("https://172.32.0.1/x", "https://172.32.0.1/x"); // just outside 172.16/12
+  ok("https://paypal.com@evil.example/x", "https://paypal.com@evil.example/x");
+  ok("https://example.com/x", "https://example.com/x");
+  ok("example.com", "https://example.com/");
 });
 
 test("garbage in, {ok:false} out", () => {

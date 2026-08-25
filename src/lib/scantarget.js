@@ -8,11 +8,16 @@
 // multi-word text, other schemes, bare IPs, emails — is refused, and the
 // caller tells the user instead of guessing.
 //
-// Pure decisions, no browser APIs.
+// Pure decisions, no browser APIs. Depends on CleanThisIntercept for the
+// local-address rule — the scanner fetches the page from its own location, so
+// a private address is a guaranteed dead end: the handoff tab would open only
+// to fail. Both background load paths already load intercept.js first
+// (background.js importScripts, manifest/firefox.json background.scripts).
 
 "use strict";
 
 (() => {
+  const intercept = self.CleanThisIntercept;
   const MAX_LEN = 2000;
 
   // Selections drag wrapping punctuation along ("see example.com," or
@@ -38,6 +43,12 @@
       return { ok: false };
     }
     if (url.protocol !== "http:" && url.protocol !== "https:") return { ok: false };
+    // Governs BOTH branches: a router page, a NAS, a local dev server is
+    // something cleanthis.io can never reach, so prefilling it would burn a
+    // tab on a certain failure. The caller shows its "couldn't find a web
+    // address" notification instead. Public IP literals stay in — a
+    // dangerous-looking host is exactly what the scanner is for.
+    if (intercept.isLocalAddress(url.hostname.toLowerCase())) return { ok: false };
     if (!url.hostname.includes(".")) return { ok: false };
     if (bare) {
       // Bare text earns the https:// guess only when it reads like a public
