@@ -440,8 +440,15 @@ const consideringDownloads = new Set();
 
 async function handleDownload(item) {
   // Our own downloads (the cleaned file, or one the user asked for untouched)
-  // must never come back through here.
-  if (item.byExtensionId && item.byExtensionId === ext.runtime.id) return;
+  // must never come back through here. This check is what actually prevents
+  // the loop — the waiver added before the download is the belt to its
+  // braces — but the waiver has now done its job, so spend it here. Left
+  // behind, it would wave through the NEXT deliberate download of the same
+  // address too, which is the opposite of what a one-shot waiver means.
+  if (item.byExtensionId && item.byExtensionId === ext.runtime.id) {
+    await consumeBypass(item.url);
+    return;
+  }
   if (handledDownloads.has(item.id)) return;
   if (consideringDownloads.has(item.id)) return;
 
@@ -772,7 +779,12 @@ async function docAskFor(url, { consume }) {
   if (!docs.isBlanketDocUrl(url)) return false;
   let host;
   try {
-    host = new URL(url).hostname.toLowerCase();
+    // Trailing dot stripped to match the key the warning page grants under
+    // (warning.js derives its host the same way, as does flagged.canonicalHost).
+    // Without this, "Open anyway" on host. grants `host` while the next check
+    // looks up `host.` — and the ask returns forever, which is exactly the
+    // never-loop guard rail this feature is bound by.
+    host = new URL(url).hostname.toLowerCase().replace(/\.$/, "");
   } catch (_) {
     return false;
   }

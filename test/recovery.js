@@ -506,6 +506,55 @@ function record(name, ok, detail) {
   record("doc bypass never satisfies a flagged wall", docBypass.flaggedUnaffected === true);
   record("a flagged bypass never satisfies the doc ask", docBypass.docUnaffected === true);
 
+  // A trailing-dot host has to resolve to the same key the warning page grants
+  // under. warning.js strips the dot before granting; if the ask does not, then
+  // "Open anyway" on host. grants `host` while the next check looks up `host.`
+  // — and the interstitial returns forever, which is the never-loop guard rail
+  // broken. Proven both ways: the ask fires when nothing is granted, and is
+  // honoured once it is.
+  const docDot = await sw.evaluate(async () => {
+    const store = chrome.storage.session || chrome.storage.local;
+    await store.remove(["docBypass", "flaggedBypass"]);
+    await chrome.storage.local.set({ docAskEnabled: true });
+    const out = {};
+    out.asksFirst = (await self.docAskFor("http://example.com./report.pdf", { consume: false })) === true;
+    // The warning page grants under the dot-stripped host, then re-navigates
+    // to the very same trailing-dot address.
+    await self.grantDocBypass("example.com");
+    out.honoured = (await self.docAskFor("http://example.com./report.pdf", { consume: true })) === false;
+    await store.remove(["docBypass", "flaggedBypass"]);
+    await chrome.storage.local.set({ docAskEnabled: false });
+    return out;
+  });
+  record(
+    "doc ask: a trailing-dot host honours the grant (no re-ask loop)",
+    docDot.asksFirst === true && docDot.honoured === true,
+    JSON.stringify(docDot)
+  );
+
+  // The waiver added before OUR OWN re-download has done its job the moment
+  // that download appears. Left behind it would wave through the next
+  // deliberate download of the same address too — the opposite of one-shot.
+  const ownSpend = await sw.evaluate(async () => {
+    const store = chrome.storage.session || chrome.storage.local;
+    await store.set({ bypassUrls: ["https://example.com/original.pdf"] });
+    await self.handleDownload({
+      id: 7601,
+      url: "https://example.com/original.pdf",
+      filename: "original.pdf",
+      byExtensionId: chrome.runtime.id,
+      state: "in_progress",
+      startTime: new Date().toISOString(),
+    });
+    const { bypassUrls = [] } = await store.get("bypassUrls");
+    return bypassUrls;
+  });
+  record(
+    "our own re-download spends the waiver it was given",
+    !ownSpend.includes("https://example.com/original.pdf"),
+    JSON.stringify(ownSpend)
+  );
+
   // Badge tiers: amber count for waiting decisions; a failed clean outranks
   // the count with a red "!" — never both at once.
   const badgeTiers = await sw.evaluate(async () => {
