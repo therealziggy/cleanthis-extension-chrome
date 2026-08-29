@@ -427,7 +427,12 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
   await page.click("#dl").catch(() => {});
 
   try {
-    const outcome = await pollWorker(
+    // Deliberately unasserted: this poll is the barrier that waits for the
+    // interception to finish cleaning before the check below looks at what
+    // happened to the local file. Its own result has never been record()ed —
+    // "the intercepted download was actually cleaned" is a real gap in this
+    // harness, not a check that was removed (verified against full history).
+    const _outcome = await pollWorker(
       context,
       async (apiBase) => {
         const items = await chrome.downloads.search({});
@@ -647,7 +652,7 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     );
 
     await page5.click("#proceed");
-    await urlSettles(page5, new RegExp(`^http:\/\/e2e-flagged\\.example:${FILE_PORT}\/$`));
+    await urlSettles(page5, new RegExp(`^http://e2e-flagged\\.example:${FILE_PORT}/$`));
     const bodyText = await page5.textContent("body");
     record("proceed anyway loads the site once", /get/.test(bodyText || ""));
 

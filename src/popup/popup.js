@@ -352,7 +352,6 @@ function stopRing() {
 // ── scan this page ────────────────────────────────────────────
 
 let scanController = null;
-let lastScan = null; // { url, tabId } — verdict actions need both
 
 async function startScan(bypass) {
   // A deliberate Rescan asks the server for a fresh run instead of the 24h
@@ -367,7 +366,6 @@ async function startScan(bypass) {
     return;
   }
 
-  lastScan = { url, tabId: tab.id };
   els.scanSite.textContent = new URL(url).hostname;
   scanController = new AbortController();
   showView("scanning");

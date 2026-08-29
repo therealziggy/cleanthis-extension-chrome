@@ -152,7 +152,7 @@ async function runAction(notificationId) {
     try {
       await ext.downloads.download({ url: action.url });
       await clearAction(notificationId);
-    } catch (err) {
+    } catch (_) {
       // Keep the offer alive and say so, rather than silently consuming the
       // user's only route back to their file.
       await notify("Couldn't start that download", "Please try again, or copy the link from the page.");
@@ -177,7 +177,7 @@ async function runAction(notificationId) {
           "Cleaned files are only kept for a few minutes. Clean it again to get a fresh copy."
         );
       }
-    } catch (err) {
+    } catch (_) {
       await notify("Couldn't fetch the cleaned file", "Please try again in a moment.");
     }
   }
