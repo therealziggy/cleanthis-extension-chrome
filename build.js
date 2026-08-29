@@ -51,7 +51,25 @@ function deepMerge(base, extra) {
   return out;
 }
 
+// The manifest version is the one that matters — it names the zips and CI
+// checks the release tag against it. package.json carries its own copy for the
+// tooling, hand-synced, with nothing until now to notice when the two drift.
+// A mismatch surfaces at release time as a tag that matches one file and not
+// the other, so it is worth failing the build over.
+function checkVersionsAgree() {
+  const manifest = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest", "base.json"), "utf8")).version;
+  const pkg = JSON.parse(fs.readFileSync(path.join(ROOT, "package.json"), "utf8")).version;
+  if (manifest !== pkg) {
+    console.error(
+      `version mismatch: manifest/base.json is ${manifest}, package.json is ${pkg} — set both to the version you are releasing.`
+    );
+    process.exit(1);
+  }
+  return manifest;
+}
+
 function build() {
+  checkVersionsAgree();
   const base = JSON.parse(fs.readFileSync(path.join(ROOT, "manifest", "base.json"), "utf8"));
 
   for (const browser of BROWSERS) {
@@ -123,4 +141,4 @@ function build() {
 // helpers, so `npm test` never writes into dist/.
 if (require.main === module) build();
 
-module.exports = { deepMerge };
+module.exports = { deepMerge, checkVersionsAgree };

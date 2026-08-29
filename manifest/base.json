@@ -36,5 +36,13 @@
   "optional_permissions": [
     "tabs",
     "webNavigation"
-  ]
+  ],
+  "commands": {
+    "_execute_action": {
+      "suggested_key": {
+        "default": "Alt+Shift+C"
+      },
+      "description": "Open CleanThis"
+    }
+  }
 }

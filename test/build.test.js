@@ -66,3 +66,14 @@ test("the fragment's own arrays are copied too", () => {
   merged.host_permissions.push("http://localhost:3000/*");
   assert.deepEqual(fragment.host_permissions, ["https://cleanthis.io/*"]);
 });
+
+test("package.json and the manifest agree on the version", () => {
+  // CI checks the release tag against manifest/base.json only, so a drifted
+  // package.json would sail through and name the wrong version in the tooling.
+  // build.js refuses to build on a mismatch; this pins the current state.
+  const fs = require("node:fs");
+  const path = require("node:path");
+  const read = (f) => JSON.parse(fs.readFileSync(path.join(__dirname, "..", f), "utf8")).version;
+
+  assert.equal(read("package.json"), read("manifest/base.json"));
+});

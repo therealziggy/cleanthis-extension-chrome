@@ -27,7 +27,7 @@
   "browser_specific_settings": {
     "gecko": {
       "id": "extension@cleanthis.io",
-      "strict_min_version": "115.0"
+      "strict_min_version": "127.0"
     }
   }
 }
