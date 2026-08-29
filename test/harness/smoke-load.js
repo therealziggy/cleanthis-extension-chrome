@@ -32,7 +32,16 @@ const EXT_DIR = path.join(__dirname, "..", "..", "dist", "chrome-dev");
   // The popup and options pages must parse and find their scripts too.
   const extensionId = new URL(serviceWorker.url()).host;
   const pageErrors = [];
-  for (const page of ["popup/popup.html", "options/options.html"]) {
+  // Every page, not just the two: a page that loses a script it needs fails
+  // at load, and this is the only check in the repo that would see it.
+  const PAGES = [
+    "popup/popup.html",
+    "options/options.html",
+    "welcome/welcome.html",
+    "clean/clean.html",
+    "warning/warning.html?to=https%3A%2F%2Fexample.invalid%2F&kind=flagged&via=commit",
+  ];
+  for (const page of PAGES) {
     const tab = await context.newPage();
     tab.on("pageerror", (err) => pageErrors.push(`${page}: ${err}`));
     tab.on("console", (msg) => {
