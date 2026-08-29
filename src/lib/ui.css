@@ -196,21 +196,6 @@ select {
   font-size: 12px;
 }
 
-.verdict {
-  display: inline-block;
-  margin-bottom: 8px;
-  padding: 3px 9px;
-  color: #fff;
-  font-weight: 700;
-  font-size: 12px;
-  border-radius: 999px;
-}
-
-.verdict-clean { background: var(--ct-green); }
-.verdict-suspicious { background: var(--ct-amber); }
-.verdict-malicious { background: var(--ct-red); }
-.verdict-unreachable { background: var(--ct-gray); }
-
 .quota {
   margin: 12px 0 0;
   color: var(--ct-muted);
@@ -367,3 +352,19 @@ select {
   }
 :root[data-theme="dark"] .ct-tile.green { color: var(--ct-green-on-dark); }
 :root[data-theme="dark"] .ct-tile.red { color: var(--ct-red-on-dark); }
+
+/* A system request for less motion is honoured everywhere: the only movement
+   in this UI is the scan ring's sweep and the toggle/segment slides, and none
+   of it carries information the settled state doesn't already show. Written
+   against every element rather than the handful that animate today, so it
+   keeps covering whatever gets added later. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
