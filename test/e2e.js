@@ -22,6 +22,11 @@ const EXT_DIR = path.join(__dirname, "..", "dist", "chrome-dev");
 const BASE = process.env.API_BASE || "http://localhost:3000";
 const FILE_PORT = 8080;
 
+// A public address the LOCAL server can genuinely fetch — its SSRF guard
+// refuses anything hosted on this machine, so the round-trip phases (3b, 3c)
+// need a real one. Override if that file ever moves.
+const FETCHABLE = process.env.E2E_FETCHABLE_URL || "https://cleanthis.io/images/awareness/hero.webp";
+
 // Smallest thing that is genuinely a PDF, so the server runs its real PDF path.
 const SAMPLE_PDF = Buffer.from(
   "%PDF-1.4\n" +
@@ -99,7 +104,9 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
       return;
     }
     res.writeHead(200, { "Content-Type": "text/html" });
-    res.end('<!doctype html><title>downloads</title><a id="dl" href="/sample.pdf">get</a>');
+    res.end(
+      `<!doctype html><title>downloads</title><a id="dl" href="/sample.pdf">get</a> <a id="dl-pub" href="${FETCHABLE}">get public</a>`
+    );
   });
   await new Promise((resolve) => fileServer.listen(FILE_PORT, "127.0.0.1", resolve));
 
@@ -427,30 +434,11 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
   await page.click("#dl").catch(() => {});
 
   try {
-    // Deliberately unasserted: this poll is the barrier that waits for the
-    // interception to finish cleaning before the check below looks at what
-    // happened to the local file. Its own result has never been record()ed —
-    // "the intercepted download was actually cleaned" is a real gap in this
-    // harness, not a check that was removed (verified against full history).
-    const _outcome = await pollWorker(
-      context,
-      async (apiBase) => {
-        const items = await chrome.downloads.search({});
-        const cleaned = items.find((d) => d.url.startsWith(`${apiBase}/api/download`));
-        const original = items.find((d) => d.url.includes("127.0.0.1:8080/sample.pdf"));
-        return {
-          done: !!(cleaned && cleaned.state === "complete"),
-          cleanedName: cleaned ? cleaned.filename.split(/[\\/]/).pop() : null,
-          originalState: original ? original.state : "erased",
-          seen: items.map((d) => `${d.state}:${d.url.slice(0, 60)}`),
-        };
-      },
-      { timeoutMs: 150000, arg: BASE }
-    );
-
     // A file served from this machine sits on a private address the service
     // could never fetch, so it must be left strictly alone — interrupting it
-    // would break the download for no possible benefit.
+    // would break the download for no possible benefit. (The intercept-and-
+    // clean half of a browser-started download is phase 3c, on an address
+    // the service can fetch.)
     const local = await pollWorker(
       context,
       async () => {
@@ -508,16 +496,15 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
   // publicly reachable URL directly. The browser-triggered half is covered by
   // 3a; what's under test here is the full round trip: submit → clean → the
   // cleaned file arriving as a download.
-  const fetchable = process.env.E2E_FETCHABLE_URL || "https://cleanthis.io/images/awareness/hero.webp";
   try {
-    const fileExt = fetchable.split(/[?#]/)[0].split(".").pop().toLowerCase();
+    const fileExt = FETCHABLE.split(/[?#]/)[0].split(".").pop().toLowerCase();
     sw = await worker(context);
     await sw.evaluate(async ({ url, fileExt: e }) => {
       await chrome.storage.local.set({ interceptExts: [e] });
       // A synthetic download item: the same shape the browser hands us, with
       // an id that no longer exists so cancel/erase are harmless no-ops.
       self.handleDownload({ id: 999999, url, filename: url.split("/").pop() });
-    }, { url: fetchable, fileExt });
+    }, { url: FETCHABLE, fileExt });
 
     const cleaned = await pollWorker(
       context,
@@ -540,6 +527,68 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     );
   } catch (err) {
     record("receive the cleaned file", false, err.message);
+  }
+
+  // ── 3c. a browser-started download is intercepted and cleaned ──
+  // 3a and 3b hand the worker synthetic download items; here the browser
+  // itself starts the download. An Alt+click means "download the link"
+  // regardless of how the target is served, so it works on a file the server
+  // can fetch (a plain click would just render it in the tab). The check
+  // demands a cleaned download that did not exist before the click — rows
+  // left behind by phases 2 and 3b can never satisfy it. This closes the gap
+  // the old unasserted barrier here papered over: no browser-started download
+  // was ever proven to come back cleaned.
+  try {
+    const fileExt = FETCHABLE.split(/[?#]/)[0].split(".").pop().toLowerCase();
+    sw = await worker(context);
+    const beforeIds = await sw.evaluate(async ({ apiBase, ext: e }) => {
+      await chrome.storage.local.set({ interceptExts: [e] });
+      // Earlier phases can leave a pageJob record behind (the page's settle
+      // remove is fire-and-forget), and the orphan sweep then re-downloads a
+      // cleaned file mid-phase — the first run of this check passed on
+      // exactly that residue. Purge the records so nothing but the click
+      // below can produce a download here.
+      const store = chrome.storage.session || chrome.storage.local;
+      const all = await store.get(null);
+      const stale = Object.keys(all).filter((k) => k.startsWith("pageJob:"));
+      if (stale.length) await store.remove(stale);
+      const items = await chrome.downloads.search({});
+      return items.filter((d) => d.url.startsWith(`${apiBase}/api/download`)).map((d) => d.id);
+    }, { apiBase: BASE, ext: fileExt });
+
+    const pubPage = await context.newPage();
+    await pubPage.goto(`http://127.0.0.1:${FILE_PORT}/`, { waitUntil: "domcontentloaded" });
+    await pubPage.click("#dl-pub", { modifiers: ["Alt"] });
+
+    const took = await pollWorker(
+      context,
+      async ({ apiBase, beforeIds: seen, url }) => {
+        const items = await chrome.downloads.search({});
+        const fresh = items.find(
+          (d) => d.url.startsWith(`${apiBase}/api/download`) && d.state === "complete" && !seen.includes(d.id)
+        );
+        const original = items.find((d) => d.url === url);
+        return {
+          // The fresh cleaned row alone is not proof — a background rescue of
+          // an earlier job could produce one. The cancelled original is what
+          // ties the arrival to THIS interception: only the Alt+click creates
+          // a row for the fixture URL, and only the extension interrupts it.
+          done: !!(fresh && original && original.state === "interrupted"),
+          name: fresh ? fresh.filename.split(/[\\/]/).pop() : null,
+          originalState: original ? original.state : "missing",
+          all: items.map((d) => `${d.state}:${d.url.slice(0, 70)}`),
+        };
+      },
+      { timeoutMs: 150000, arg: { apiBase: BASE, beforeIds, url: FETCHABLE } }
+    );
+    record(
+      "a browser-started download is intercepted and the cleaned copy arrives",
+      !took.timeout,
+      took.timeout ? `saw ${JSON.stringify(took.all)}` : `${took.name}, original=${took.originalState}`
+    );
+    await pubPage.close();
+  } catch (err) {
+    record("a browser-started download is intercepted and the cleaned copy arrives", false, err.message);
   }
 
   // Put the extension list back for the remaining phases.
