@@ -495,35 +495,43 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
   // blocks loopback and private addresses), so this phase feeds the handler a
   // publicly reachable URL directly. The browser-triggered half is covered by
   // 3a; what's under test here is the full round trip: submit → clean → the
-  // cleaned file arriving as a download.
+  // cleaned file arriving as a download. Phase 2b has already left a completed
+  // cleaned download behind, so the check demands a row that did not exist
+  // before this submission — same discipline as 3c.
   try {
     const fileExt = FETCHABLE.split(/[?#]/)[0].split(".").pop().toLowerCase();
     sw = await worker(context);
-    await sw.evaluate(async ({ url, fileExt: e }) => {
+    const beforeIds = await sw.evaluate(async ({ url, fileExt: e, apiBase }) => {
       await chrome.storage.local.set({ interceptExts: [e] });
+      const before = (await chrome.downloads.search({}))
+        .filter((d) => d.url.startsWith(`${apiBase}/api/download`))
+        .map((d) => d.id);
       // A synthetic download item: the same shape the browser hands us, with
       // an id that no longer exists so cancel/erase are harmless no-ops.
       self.handleDownload({ id: 999999, url, filename: url.split("/").pop() });
-    }, { url: FETCHABLE, fileExt });
+      return before;
+    }, { url: FETCHABLE, fileExt, apiBase: BASE });
 
     const cleaned = await pollWorker(
       context,
-      async (apiBase) => {
+      async ({ apiBase, beforeIds: seen }) => {
         const items = await chrome.downloads.search({});
-        const done = items.find((d) => d.url.startsWith(`${apiBase}/api/download`) && d.state === "complete");
+        const done = items.find(
+          (d) => d.url.startsWith(`${apiBase}/api/download`) && d.state === "complete" && !seen.includes(d.id)
+        );
         return {
           done: !!done,
           name: done ? done.filename.split(/[\\/]/).pop() : null,
-          seen: items.map((d) => `${d.state}:${d.url.slice(0, 70)}`),
+          all: items.map((d) => `${d.state}:${d.url.slice(0, 70)}`),
         };
       },
-      { timeoutMs: 150000, arg: BASE }
+      { timeoutMs: 150000, arg: { apiBase: BASE, beforeIds } }
     );
 
     record(
       "receive the cleaned file",
       !cleaned.timeout,
-      cleaned.timeout ? `saw ${JSON.stringify(cleaned.seen)}` : cleaned.name
+      cleaned.timeout ? `saw ${JSON.stringify(cleaned.all)}` : cleaned.name
     );
   } catch (err) {
     record("receive the cleaned file", false, err.message);
