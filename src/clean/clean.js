@@ -318,10 +318,20 @@ async function runJob({ submit, displayName, subLabel, urlMode }) {
 
   // Mark the job dealt-with: drop the handoff record, tell the worker, close
   // the port. A dead port means a restarted worker — whose sweep reads the
-  // record, so removing it first settles the job for that path too.
-  function settle() {
+  // record, so the removal comes first and is AWAITED: callers must not
+  // show a settled state (the cue that closing the tab is safe) until the
+  // record is genuinely gone, or a close right then would strand it for the
+  // next worker's sweep to claim and announce all over again.
+  async function settle() {
     settled = true;
-    if (jobMsg) handoffStore.remove("pageJob:" + jobMsg.jobId).catch(() => {});
+    if (jobMsg) {
+      try {
+        await handoffStore.remove("pageJob:" + jobMsg.jobId);
+      } catch (_) {
+        /* the record outlives us and the sweep may repeat itself; the done
+           below still settles this worker */
+      }
+    }
     try {
       port.postMessage({ done: true });
     } catch (_) {
@@ -375,7 +385,7 @@ async function runJob({ submit, displayName, subLabel, urlMode }) {
       renderDone(finished, displayName, subLabel, job, settle);
     } else if (finished.state === "cancelled") {
       progress.stop();
-      settle();
+      await settle();
       const wrap = document.createDocumentFragment();
       wrap.append(toneBlock("", "That job was cancelled.", "Nothing was kept on our side."));
       wrap.append(anotherButton("Clean another"));
@@ -384,7 +394,7 @@ async function runJob({ submit, displayName, subLabel, urlMode }) {
       // The failure is on screen already; no need for the background worker to
       // repeat it as a notification.
       progress.stop();
-      settle();
+      await settle();
       const wrap = document.createDocumentFragment();
       wrap.append(toneBlock("", "Cleaning failed.",
         `${finished.error || "The server couldn't process this one."} Your upload was erased either way.`));
@@ -545,9 +555,11 @@ function renderDone(finished, displayName, subLabel, job, settle) {
       await ext.downloads.download({ url, filename: fresh.downloadName || undefined });
       // Only now is the file genuinely the user's; until this point the
       // port stays open so a closed page hands the job to the background.
+      // Settled BEFORE "Saved." goes up: the note invites closing the tab,
+      // so the handoff record has to be gone by the time it shows.
+      await settle();
       note.textContent = "Saved.";
       note.classList.add("ok");
-      settle();
     } catch (err) {
       // Leave the button usable — the job is valid for a few more minutes
       // and a second click often just works.

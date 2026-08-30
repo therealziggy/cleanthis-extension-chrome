@@ -447,6 +447,122 @@ function record(name, ok, detail) {
   record("a page job too old to announce is dropped silently", pageJobs.staleDropped === true);
   record("a live page's job is left to the page", pageJobs.liveSkipped === true);
 
+  // A settled job's record must not outlive settlement. The clean page's
+  // settle() drops the pageJob record — but dropping it fire-and-forget lets
+  // the page render "Saved." (the cue that closing the tab is safe) while the
+  // removal is still in flight. A tab closed at that moment strands the
+  // record, and the NEXT worker's start-time sweep claims it and announces
+  // the job all over again: a duplicate download of a file the user already
+  // has, minutes later (observed live 2026-08-31 — a third /api/download row
+  // ~2.5 minutes after a saved page-clean). The contract: the removal is
+  // COMMITTED before either settlement signal, the "Saved." note or the done
+  // message on the port. Proven by holding the removal open behind a gate on
+  // the real clean page and watching what escapes while it is held.
+  const settleOrder = await (async () => {
+    const extensionId = new URL(sw.url()).host;
+    const page = await context.newPage();
+    await page.goto(`chrome-extension://${extensionId}/clean/clean.html`, { waitUntil: "load" });
+
+    await page.evaluate(() => {
+      const pageExt = typeof browser !== "undefined" ? browser : chrome;
+      const store = pageExt.storage.session || pageExt.storage.local;
+
+      // Hold pageJob removals until released; note each one that commits.
+      // Everything else passes straight through — the page's other storage
+      // traffic is not under test.
+      const realRemove = store.remove.bind(store);
+      self.__held = [];
+      self.__committed = [];
+      const gate = new Promise((resolve) => { self.__release = resolve; });
+      store.remove = (keys) => {
+        if (typeof keys === "string" && keys.startsWith("pageJob:")) {
+          self.__held.push(keys);
+          return gate.then(async () => {
+            await realRemove(keys);
+            self.__committed.push(keys);
+          });
+        }
+        return realRemove(keys);
+      };
+
+      // The REAL port, with postMessage watched: was the done message posted
+      // before the removal had committed?
+      const realConnect = pageExt.runtime.connect.bind(pageExt.runtime);
+      self.__doneBeforeCommit = null;
+      pageExt.runtime.connect = (info) => {
+        const port = realConnect(info);
+        const realPost = port.postMessage.bind(port);
+        port.postMessage = (msg) => {
+          if (msg && msg.done) self.__doneBeforeCommit = self.__committed.length === 0;
+          return realPost(msg);
+        };
+        return port;
+      };
+
+      // An instant job: no network, and no real download row.
+      self.CleanThisApi.sanitizeFile = async () => ({ jobId: "settle-job", downloadToken: "dt" });
+      self.CleanThisApi.waitForJob = async () => ({ state: "completed", downloadName: "settled.txt" });
+      self.CleanThisApi.getJob = async () => ({
+        state: "completed",
+        downloadUrl: "/api/download/settle?sig=t",
+        downloadName: "settled.txt",
+      });
+      pageExt.downloads.download = async () => 1;
+    });
+
+    await page.setInputFiles("#file-input", {
+      name: "settle.txt",
+      mimeType: "text/plain",
+      buffer: Buffer.from("settle fixture\n"),
+    });
+    await page.waitForFunction(
+      () => /Scrubbed\. All yours\./.test(document.querySelector("#clean-result")?.textContent || ""),
+      null,
+      { timeout: 15000 }
+    );
+    await page.click("#clean-result button"); // "Save cleaned file"
+
+    // settle() has started the moment the removal is held. What may the user
+    // have been shown by now?
+    await page.waitForFunction(() => self.__held.length === 1, null, { timeout: 15000 });
+    const savedWhileHeld = await page.evaluate(
+      () => /Saved\./.test(document.querySelector("#clean-result .driver")?.textContent || "")
+    );
+
+    // Let the removal commit; the page may now finish settling.
+    await page.evaluate(() => self.__release());
+    await page.waitForFunction(
+      () => /Saved\./.test(document.querySelector("#clean-result .driver")?.textContent || ""),
+      null,
+      { timeout: 15000 }
+    );
+    const doneBeforeCommit = await page.evaluate(() => self.__doneBeforeCommit);
+    const leftover = await sw.evaluate(async () => {
+      const store = chrome.storage.session || chrome.storage.local;
+      const { "pageJob:settle-job": row = null } = await store.get("pageJob:settle-job");
+      return row;
+    });
+
+    await page.close();
+    await sw.evaluate(async () => {
+      const store = chrome.storage.session || chrome.storage.local;
+      await store.remove("pageJob:settle-job");
+    });
+    return { savedWhileHeld, doneBeforeCommit, leftover };
+  })();
+  record(
+    '"Saved." waits for the handoff record to be gone',
+    settleOrder.savedWhileHeld === false && !settleOrder.leftover,
+    settleOrder.savedWhileHeld
+      ? '"Saved." rendered while the removal was still in flight'
+      : `leftover record: ${JSON.stringify(settleOrder.leftover)}`
+  );
+  record(
+    "the done message follows the removal, never precedes it",
+    settleOrder.doneBeforeCommit === false,
+    `done posted before the removal committed: ${settleOrder.doneBeforeCommit}`
+  );
+
   // The flagged-toggle grant can outlive the popup: the browser's permission
   // prompt steals focus, the popup dies, and the change handler's continuation
   // (which would write flaggedEnabled) never runs even though the user clicked

@@ -543,11 +543,12 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     sw = await worker(context);
     const beforeIds = await sw.evaluate(async ({ apiBase, ext: e }) => {
       await chrome.storage.local.set({ interceptExts: [e] });
-      // Earlier phases can leave a pageJob record behind (the page's settle
-      // remove is fire-and-forget), and the orphan sweep then re-downloads a
-      // cleaned file mid-phase — the first run of this check passed on
-      // exactly that residue. Purge the records so nothing but the click
-      // below can produce a download here.
+      // Earlier phases can leave a pageJob record behind (settle awaits the
+      // removal before showing "Saved.", but a page that dies mid-settle
+      // cannot commit it), and the orphan sweep then re-downloads a cleaned
+      // file mid-phase — the first run of this check passed on exactly that
+      // residue, back when the removal was still fire-and-forget. Purge the
+      // records so nothing but the click below can produce a download here.
       const store = chrome.storage.session || chrome.storage.local;
       const all = await store.get(null);
       const stale = Object.keys(all).filter((k) => k.startsWith("pageJob:"));
