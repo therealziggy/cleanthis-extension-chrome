@@ -257,6 +257,59 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
       dismissClicked ? "" : "no Dismiss button rendered"
     );
 
+    // ── 1c. scan-another-page input ──────────────────────────
+    // Refusal first: multi-word text is not an address — inline hint, view
+    // unchanged, no server call. Asserts the hint SHOWS, so a dead handler
+    // fails this rather than passing vacuously.
+    await popup.evaluate(() => self.__ctPopup.showView("idle"));
+    await popup.fill("#scan-other", "not a url");
+    await popup.click("#scan-other-go");
+    const refused = await popup.evaluate(
+      () => !document.getElementById("scan-other-hint").hidden && !document.getElementById("view-idle").hidden
+    );
+    record("paste refusal shows inline hint", refused === true);
+
+    // A real address scans in-popup. The active tab here is the popup page
+    // itself (not scannable), so a verdict can only come from the pasted URL.
+    await popup.fill("#scan-other", "example.com");
+    await popup.click("#scan-other-go");
+    const pastedVerdict = await popup
+      .waitForFunction(() => !document.getElementById("view-verdict").hidden, null, { timeout: 90000 })
+      .then(() => true)
+      .catch(() => false);
+    const pastedHost = pastedVerdict
+      ? await popup.evaluate(() => document.querySelector("#view-verdict .verdict-sub .host").textContent)
+      : "";
+    record(
+      "pasted address scans in-popup",
+      pastedVerdict === true && pastedHost === "example.com",
+      pastedHost || "verdict never rendered"
+    );
+
+    // No tab behind the verdict: malicious offers Details only, and the
+    // closer speaks to someone who has not visited.
+    await popup.evaluate(() => {
+      self.__ctPopup.renderVerdict("https://example.com/", null, {
+        verdict: "malicious",
+        findings: [],
+        scores: {
+          security: { value: 4, band: "red", coverage: "full", driver: "Known threat" },
+          privacy: { value: 20, band: "red", coverage: "full", driver: "Tracking heavy" },
+          legitimacy: { value: 9, band: "red", coverage: "full", driver: "Cloaked content" },
+        },
+      });
+      self.__ctPopup.showView("verdict");
+    });
+    const noTab = await popup.evaluate(() => ({
+      buttons: [...document.querySelectorAll("#view-verdict .verdict-actions button")].map((b) => b.textContent),
+      closer: (document.querySelector("#view-verdict .verdict-closer") || {}).textContent || "",
+    }));
+    record(
+      "pasted malicious verdict has no tab action",
+      noTab.buttons.length === 1 && noTab.buttons[0] === "Details" && /before visiting/.test(noTab.closer),
+      JSON.stringify(noTab.buttons)
+    );
+
     await popup.close();
   } catch (err) {
     record("popup UI", false, err.message);
