@@ -357,6 +357,56 @@ function record(name, ok, detail) {
     outlivesToast.started === "https://example.com/toast.pdf" && outlivesToast.clearedAfterUse === true
   );
 
+  // Declining is a decision too: the popup row's Dismiss drops the offer
+  // without carrying it out — nothing downloads, no bypass is granted, and
+  // only the dismissed row goes. The badge is recounted, not just cleared:
+  // dropping the failed clean here must demote red "!" to an amber count.
+  const declined = await sw.evaluate(async () => {
+    if (typeof self.dismissAction !== "function") return { missing: true };
+    const store = chrome.storage.session || chrome.storage.local;
+    await store.set({
+      pendingActions: {
+        keepMe: { kind: "download-cleaned", jobId: "j1", token: "t1", label: "Save file", name: "keep.pdf" },
+        dropMe: { kind: "download-original", url: "https://example.com/decline.pdf", name: "decline.pdf" },
+      },
+      bypassUrls: [],
+    });
+    await self.refreshBadge();
+    const badgeBefore = await chrome.action.getBadgeText({});
+
+    const realDownload = chrome.downloads.download;
+    let downloads = 0;
+    chrome.downloads.download = async () => {
+      downloads++;
+      return 1;
+    };
+    await self.dismissAction("dropMe");
+    chrome.downloads.download = realDownload;
+
+    const { pendingActions = {}, bypassUrls = [] } = await store.get(["pendingActions", "bypassUrls"]);
+    const badgeAfter = await chrome.action.getBadgeText({});
+    await store.set({ pendingActions: {} });
+    await self.refreshBadge();
+    return {
+      badgeBefore,
+      badgeAfter,
+      droppedTarget: !pendingActions.dropMe,
+      keptOther: !!pendingActions.keepMe,
+      downloads,
+      bypasses: bypassUrls.length,
+    };
+  });
+  record(
+    "dismissing a pending offer drops just that offer",
+    !declined.missing && declined.droppedTarget && declined.keptOther && declined.downloads === 0 && declined.bypasses === 0,
+    declined.missing ? "dismissAction is not implemented" : `downloads ${declined.downloads}, bypasses ${declined.bypasses}`
+  );
+  record(
+    "dismissal recounts the badge",
+    !declined.missing && declined.badgeBefore === "!" && declined.badgeAfter === "1",
+    declined.missing ? "dismissAction is not implemented" : `badge "${declined.badgeBefore}" → "${declined.badgeAfter}"`
+  );
+
   // Soft heads-ups say WHY (v0.6.9): a hacked-but-legit site and a site the
   // list knows only for spam promotion get different wording — same
   // dismissible, never-a-wall treatment either way.

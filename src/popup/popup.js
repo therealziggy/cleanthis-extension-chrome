@@ -126,7 +126,26 @@ async function refreshPending() {
       await refreshPending();
     });
 
-    row.append(button);
+    // Declining is a decision the row must allow too — without it, an ignored
+    // offer sits on the badge for the rest of the session.
+    const dismiss = document.createElement("button");
+    dismiss.type = "button";
+    dismiss.className = "secondary pending-dismiss";
+    dismiss.textContent = "Dismiss";
+    dismiss.addEventListener("click", async () => {
+      dismiss.disabled = true;
+      try {
+        await ext.runtime.sendMessage({ type: "dismissAction", id });
+      } catch (_) {
+        /* refreshing below shows whether it worked */
+      }
+      await refreshPending();
+    });
+
+    const actions = document.createElement("div");
+    actions.className = "pending-actions";
+    actions.append(button, dismiss);
+    row.append(actions);
     els.pendingList.append(row);
   }
 }

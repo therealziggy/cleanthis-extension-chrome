@@ -218,6 +218,45 @@ async function pollWorker(context, fn, { timeoutMs, intervalMs = 1000, arg } = {
     const idleDeepHidden = await popup.evaluate(() => document.getElementById("deep-line").hidden);
     record("idle deep link hidden off-page", idleDeepHidden === true);
 
+    // A pending offer can be declined from its row: plant one, re-render, and
+    // click Dismiss — the row and its store entry must both go, through the
+    // real popup → background message.
+    await popup.evaluate(async () => {
+      const pageExt = typeof browser !== "undefined" ? browser : chrome;
+      const store = pageExt.storage.session || pageExt.storage.local;
+      await store.set({
+        pendingActions: {
+          "e2e-dismiss": { kind: "download-original", url: "http://127.0.0.1:8080/decline.pdf", name: "decline.pdf" },
+        },
+      });
+      await self.__ctPopup.showView("idle");
+      await self.__ctPopup.refreshPending();
+    });
+    const dismissClicked = await popup
+      .click("#pending-list .pending-dismiss", { timeout: 5000 })
+      .then(() => true)
+      .catch(() => false);
+    const dismissed =
+      dismissClicked &&
+      (await popup
+        .waitForFunction(
+          async () => {
+            const pageExt = typeof browser !== "undefined" ? browser : chrome;
+            const store = pageExt.storage.session || pageExt.storage.local;
+            const { pendingActions = {} } = await store.get("pendingActions");
+            return !pendingActions["e2e-dismiss"] && document.getElementById("pending").hidden;
+          },
+          null,
+          { timeout: 5000 }
+        )
+        .then(() => true)
+        .catch(() => false));
+    record(
+      "popup Dismiss declines a pending offer",
+      dismissed === true,
+      dismissClicked ? "" : "no Dismiss button rendered"
+    );
+
     await popup.close();
   } catch (err) {
     record("popup UI", false, err.message);

@@ -113,14 +113,19 @@ body {
 
 .pending-why { font-size: 11.5px; color: var(--ct-muted); line-height: 1.4; }
 
+.pending li .pending-actions { display: flex; gap: 7px; margin-top: 4px; }
+
 .pending li button {
-  margin-top: 4px;
   padding: 8px 11px;
   font-weight: 600;
   font-size: 12px;
   border: 0;
   border-radius: 7px;
 }
+
+.pending li .pending-actions button:first-child { flex: 1; }
+
+.pending li button.pending-dismiss { flex: none; border: 1px solid var(--ct-line); }
 
 .pending button.danger { background: var(--ct-red); color: #fff; }
 .pending button.danger:hover:not(:disabled) { background: #b91c1c; }

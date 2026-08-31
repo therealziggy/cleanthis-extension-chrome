@@ -183,6 +183,15 @@ async function runAction(notificationId) {
   }
 }
 
+// Declining is a decision too. The popup row's Dismiss drops the offer
+// without carrying it out: nothing downloads, no bypass is granted, and the
+// badge is recounted. A change of heart only costs a re-clean — cleaned
+// copies expire on the server within minutes anyway.
+function dismissAction(notificationId) {
+  ext.notifications.clear(notificationId);
+  return clearAction(notificationId);
+}
+
 // The whole notification is the click target — the one gesture both browsers
 // agree on.
 ext.notifications.onClicked.addListener((notificationId) => {
@@ -191,7 +200,8 @@ ext.notifications.onClicked.addListener((notificationId) => {
 
 // A dismissed notification must NOT drop the offer: the popup is now where it
 // lives, and dismissing a toast isn't a decision about the file. The entry is
-// only cleared once its action has actually been carried out.
+// only cleared once its action has been carried out — or explicitly declined
+// through the popup row's Dismiss, which is one.
 
 // ── bypass list ───────────────────────────────────────────────
 // URLs the user chose to download untouched. Capped so a long session can't
@@ -598,6 +608,12 @@ ext.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!message) return undefined;
   if (message.type === "runAction") {
     runAction(message.id)
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+  if (message.type === "dismissAction") {
+    dismissAction(message.id)
       .then(() => sendResponse({ ok: true }))
       .catch(() => sendResponse({ ok: false }));
     return true;
