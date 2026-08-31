@@ -30,7 +30,9 @@ Features:
   privacy / legitimacy score wheels for the tab you're on (always a Standard scan),
   with the same reasons and wording the website's report shows. Need more than a
   quick look? A **Deep scan** link hands the page off to the scanner on
-  cleanthis.io with everything pre-filled — you just press Scan there.
+  cleanthis.io with everything pre-filled — you just press Scan there. There's
+  also an *or scan another page…* box under the button: paste or type any
+  address to check it the same way, before you ever visit it.
 - **Right-click scanning** — right-click any link (or select a web address as text,
   even inside a text box) and choose *Scan with CleanThis*: the scanner on
   cleanthis.io opens with the address pre-filled — nothing runs until you press
