@@ -57,6 +57,18 @@
     </button>
     <p id="deep-line" class="deep-line" hidden>Need a deeper look?
       <button id="deep-scan" type="button" class="linklike">Deep scan ↗</button></p>
+    <div class="scan-other">
+      <input id="scan-other" type="text" maxlength="2000" placeholder="or scan another page…"
+             autocomplete="off" spellcheck="false" aria-label="Web address to scan">
+      <button id="scan-other-go" type="button" disabled aria-label="Scan that address">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+             stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+          <path d="M5 12h14"></path>
+          <path d="M13 6l6 6-6 6"></path>
+        </svg>
+      </button>
+    </div>
+    <p id="scan-other-hint" class="scan-other-hint" hidden>That needs to be a public web address — something like example.com.</p>
     <div class="rule"><span>or</span></div>
     <div id="open-clean" class="dropzone" role="button" tabindex="0"
          aria-label="Open the file-cleaning window">
@@ -160,6 +172,7 @@
   <script src="../lib/api.js"></script>
   <script src="../lib/verdict.js"></script>
   <script src="../lib/intercept.js"></script>
+  <script src="../lib/scantarget.js"></script>
   <script src="../lib/filetypes.js"></script>
   <script src="../lib/docs.js"></script>
   <script src="popup.js"></script>

@@ -13,6 +13,7 @@ const vlib = self.CleanThisVerdict;
 const docs = self.CleanThisDocs;
 const fileTypes = self.CleanThisFileTypes;
 const theme = self.CleanThisTheme;
+const scanTarget = self.CleanThisScanTarget;
 
 const els = {
   brand: document.getElementById("brand"),
@@ -28,6 +29,9 @@ const els = {
   pendingCount: document.getElementById("pending-count"),
   site: document.getElementById("site"),
   scanBtn: document.getElementById("scan-page"),
+  scanOther: document.getElementById("scan-other"),
+  scanOtherGo: document.getElementById("scan-other-go"),
+  scanOtherHint: document.getElementById("scan-other-hint"),
   openClean: document.getElementById("open-clean"),
   scanSite: document.getElementById("scan-site"),
   ringBar: document.getElementById("ring-bar"),
@@ -371,13 +375,22 @@ function stopRing() {
 // ── scan this page ────────────────────────────────────────────
 
 let scanController = null;
+let lastTarget = null; // the {url, tabId} actually scanned — retries reuse it
 
-async function startScan(bypass) {
+async function startScan(bypass, target) {
   // A deliberate Rescan asks the server for a fresh run instead of the 24h
   // cached result — same contract as the website's Re-scan button.
   const fresh = bypass === true;
-  const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
-  const url = tab && tab.url;
+
+  // No target = the button path: scan whatever tab the user is looking at.
+  // A pasted address arrives as {url, tabId: null} — there is no tab.
+  let url = target && target.url;
+  let tabId = target ? target.tabId : null;
+  if (!target) {
+    const [tab] = await ext.tabs.query({ active: true, currentWindow: true });
+    url = tab && tab.url;
+    tabId = tab ? tab.id : null;
+  }
 
   if (!url || !/^https?:\/\//i.test(url)) {
     renderError("notpage");
@@ -385,6 +398,7 @@ async function startScan(bypass) {
     return;
   }
 
+  lastTarget = { url, tabId };
   els.scanSite.textContent = new URL(url).hostname;
   scanController = new AbortController();
   showView("scanning");
@@ -393,7 +407,7 @@ async function startScan(bypass) {
   try {
     const result = await api.scanUrl(url, "standard", { signal: scanController.signal, bypassCache: fresh });
     await finishRing();
-    renderVerdict(url, tab.id, result);
+    renderVerdict(url, tabId, result);
     showView("verdict");
   } catch (err) {
     stopRing();
@@ -410,6 +424,37 @@ async function startScan(bypass) {
 }
 
 els.scanBtn.addEventListener("click", () => startScan(false));
+
+// ── scan another page: a pasted or typed address ──────────────
+// resolve() (lib/scantarget.js) answers "is this unambiguously a public
+// http(s) address?" — the same rules the right-click scan uses. Anything it
+// refuses gets one inline hint; the popup never guesses.
+
+function submitOtherScan() {
+  if (els.scanOther.value.trim() === "") return;
+  const resolved = scanTarget.resolve(els.scanOther.value);
+  if (!resolved.ok) {
+    els.scanOtherHint.hidden = false;
+    els.scanOther.focus();
+    return;
+  }
+  els.scanOtherHint.hidden = true;
+  startScan(false, { url: resolved.url, tabId: null });
+}
+
+els.scanOtherGo.addEventListener("click", submitOtherScan);
+
+els.scanOther.addEventListener("keydown", (event) => {
+  if (event.key === "Enter") {
+    event.preventDefault();
+    submitOtherScan();
+  }
+});
+
+els.scanOther.addEventListener("input", () => {
+  els.scanOtherGo.disabled = els.scanOther.value.trim() === "";
+  els.scanOtherHint.hidden = true;
+});
 
 els.cancelScan.addEventListener("click", () => {
   if (scanController) scanController.abort();
@@ -567,7 +612,7 @@ function renderVerdict(url, tabId, result) {
   els.verdict.append(text("p", `statement ${statement.strong ? "strong" : ""}`.trim(), statement.text));
 
   const actions = text("div", "verdict-actions");
-  if (verdict === "malicious") {
+  if (verdict === "malicious" && tabId !== null) {
     actions.append(actionButton("primary-act danger-act", "Get me out of here", async () => {
       try {
         await ext.tabs.remove(tabId);
@@ -579,16 +624,23 @@ function renderVerdict(url, tabId, result) {
     actions.append(actionButton("secondary", "Details", () => {
       ext.tabs.create({ url: reportUrl(url) });
     }));
+  } else if (verdict === "malicious") {
+    // A pasted address: no tab to close, so the report is the whole act.
+    actions.append(actionButton("primary-act", "Details", () => {
+      ext.tabs.create({ url: reportUrl(url) });
+    }));
   } else {
     actions.append(actionButton("primary-act", "Full report ↗", () => {
       ext.tabs.create({ url: reportUrl(url) });
     }));
-    actions.append(actionButton("secondary", "Rescan", () => startScan(true)));
+    actions.append(actionButton("secondary", "Rescan", () => startScan(true, { url, tabId })));
   }
   els.verdict.append(actions);
 
   if (verdict === "malicious") {
-    els.verdict.append(text("p", "verdict-closer", "You can still proceed — we'll just look at you funny."));
+    els.verdict.append(text("p", "verdict-closer", tabId === null
+      ? "Good thing you checked before visiting."
+      : "You can still proceed — we'll just look at you funny."));
   } else {
     // The moment deep matters is right after quick results — the wheels above
     // may already say "limited (Quick scan)". Malicious keeps its two actions.
@@ -681,7 +733,7 @@ async function renderError(kind, err) {
   els.error.append(block);
 
   const actions = text("div", "error-actions");
-  if (spec.retry) actions.append(actionButton("", "Try again", () => startScan(false)));
+  if (spec.retry) actions.append(actionButton("", "Try again", () => startScan(false, lastTarget)));
   actions.append(actionButton("secondary", "Back", () => showView("idle")));
   els.error.append(actions);
 }

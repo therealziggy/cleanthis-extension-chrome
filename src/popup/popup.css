@@ -203,6 +203,44 @@ button.primary {
 
 #view-verdict .deep-line { margin: 0; text-align: left; }
 
+/* "or scan another page…" — a quiet input row under the this-page cluster.
+   Always shown: on chrome:// pages it is the only thing the popup can scan. */
+.scan-other { display: flex; gap: 6px; margin-top: 10px; }
+
+.scan-other input {
+  flex: 1;
+  min-width: 0;
+  padding: 9px 11px;
+  border: 1px solid var(--ct-line);
+  border-radius: 8px;
+  background: var(--ct-card);
+  color: var(--ct-text);
+  font: inherit;
+  font-size: 12.5px;
+}
+
+.scan-other input::placeholder { color: var(--ct-muted); }
+
+.scan-other input:focus-visible { outline: 2px solid var(--ct-primary); outline-offset: 1px; }
+
+.scan-other button {
+  flex: none;
+  display: flex;
+  align-items: center;
+  padding: 0 10px;
+  border: 1px solid var(--ct-line);
+  border-radius: 8px;
+  background: var(--ct-card);
+  color: var(--ct-btn-bg);
+  cursor: pointer;
+}
+
+.scan-other button:disabled { color: var(--ct-faint); cursor: default; }
+
+.scan-other button:hover:not(:disabled) { background: var(--ct-accent-tint); border-color: var(--ct-primary); }
+
+.scan-other-hint { margin: 6px 0 0; font-size: 11px; color: var(--ct-amber-ink); }
+
 button.linklike {
   padding: 0;
   font-size: inherit;
