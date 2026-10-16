@@ -114,7 +114,7 @@ els.settings.addEventListener("click", (event) => {
 // bounded estimate that eases toward 90% and holds; real milestones (upload
 // done, job picked up) push a floor underneath it so it never slides back.
 
-const RING_CIRCUMFERENCE = 345.6; // 2π × r55
+const METER_CELLS = 44;
 const STEPS = [
   "Uploaded over TLS",
   "Scanned — no virus signatures",
@@ -129,35 +129,33 @@ const STEPS_URL = [
   "Rebuilding from safe content",
 ];
 
-const SVG_NS = "http://www.w3.org/2000/svg";
-
-function ringCircle(className, extra = {}) {
-  const circle = document.createElementNS(SVG_NS, "circle");
-  circle.setAttribute("class", className);
-  circle.setAttribute("cx", "66");
-  circle.setAttribute("cy", "66");
-  circle.setAttribute("r", "55");
-  circle.setAttribute("stroke-width", "11");
-  circle.setAttribute("fill", "none");
-  for (const [name, value] of Object.entries(extra)) circle.setAttribute(name, value);
-  return circle;
+// The website's progress bar: a percentage over a run of █ (done) and ░ (to go).
+function buildRing() {
+  const root = text("div", "ct-meter");
+  const top = text("div", "ct-meter-top");
+  const pct = text("span", "pct", "0%");
+  top.append(pct, text("span", "sub", `${levelLabel(currentLevel)} clean`));
+  const bar = text("div", "ct-meter-bar");
+  bar.setAttribute("aria-hidden", "true");
+  root.append(top, bar);
+  return { root, bar, pct };
 }
 
-function buildRing() {
-  const root = text("div", "ct-ring");
-  const svg = document.createElementNS(SVG_NS, "svg");
-  svg.setAttribute("viewBox", "0 0 132 132");
-  svg.setAttribute("width", "132");
-  svg.setAttribute("height", "132");
-  svg.setAttribute("aria-hidden", "true");
-  const bar = ringCircle("bar", { "stroke-dasharray": "345.6", "stroke-dashoffset": "345.6" });
-  svg.append(ringCircle("track"), bar);
-  root.append(svg);
-  const label = text("div", "ct-ring-label");
-  const pct = text("span", "pct", "0%");
-  label.append(pct, text("span", "sub", `${levelLabel(currentLevel)} clean`));
-  root.append(label);
-  return { root, bar, pct };
+function paintBlocks(node, pct, cells) {
+  const filled = Math.min(cells, Math.ceil((cells * Math.max(0, Math.min(100, pct))) / 100));
+  node.textContent = "";
+  node.append(text("b", null, "█".repeat(filled)), "░".repeat(cells - filled));
+}
+
+// Boo, the site's mascot, in the mood that fits.
+function boo(mood, className, size) {
+  const img = document.createElement("img");
+  img.className = `spr ${className || ""}`.trim();
+  img.src = `../sprites/boo-${mood}.svg`;
+  img.alt = "";
+  img.width = size;
+  img.height = size;
+  return img;
 }
 
 function buildChecklist(urlMode) {
@@ -178,11 +176,11 @@ function makeProgress(ring, checklist) {
   function paint(pct) {
     current = pct;
     ring.pct.textContent = `${Math.round(pct)}%`;
-    ring.bar.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - pct / 100));
+    paintBlocks(ring.bar, pct, METER_CELLS);
     checklist.querySelectorAll("li").forEach((li, i) => {
       const state = pct >= (i + 1) * 25 ? "done" : pct >= i * 25 ? "active" : "queued";
       li.className = state;
-      li.querySelector(".mark").textContent = state === "done" ? "✓" : "";
+      li.querySelector(".mark").textContent = state === "done" ? "done" : state === "active" ? "working" : "waiting";
     });
   }
 
@@ -214,14 +212,22 @@ function renderCleaning(displayName, subLabel, urlMode) {
   const row = text("div", "clean-row");
   const ring = buildRing();
   const checklist = buildChecklist(urlMode);
-  row.append(ring.root);
 
   const side = text("div", "clean-side");
+  side.append(text("p", "eyebrow", "$ cleanthis --clean"));
   side.append(text("h2", "state-title", "Taking it apart, carefully."));
   side.append(text("p", "state-sub", [displayName, subLabel].filter(Boolean).join(" · ")));
-  side.append(checklist);
-  row.append(side);
+  row.append(side, boo("scrub", "bob clean-boo", 56));
   wrap.append(row);
+
+  const log = text("div", "win clean-win");
+  const bar = text("div", "win__bar");
+  bar.append(text("span", "win__title", "clean.log"));
+  log.append(bar);
+  const body = text("div", "win__body clean-logbody");
+  body.append(ring.root, checklist);
+  log.append(body);
+  wrap.append(log);
 
   const reassure = text("div", "block");
   reassure.append(text("p", "block-title", "Close this window if you like"));
@@ -261,7 +267,7 @@ function renderReport(report) {
   const list = text("ul", "report-list");
   for (const change of rest.slice(0, MAX_REPORT_ITEMS)) {
     const row = text("li", change.danger ? "danger" : null);
-    row.append(text("span", "row-glyph", change.danger ? "✕" : "•"));
+    row.append(text("span", "row-glyph", change.danger ? "✕" : "■"));
     row.append(text("span", null, change.label));
     list.append(row);
   }
@@ -513,27 +519,14 @@ function renderDone(finished, displayName, subLabel, job, settle) {
   const wrap = document.createDocumentFragment();
 
   const head = text("div", "done-head");
-  const tile = text("div", "ct-tile green big");
-  const check = document.createElementNS(SVG_NS, "svg");
-  check.setAttribute("width", "26");
-  check.setAttribute("height", "26");
-  check.setAttribute("viewBox", "0 0 24 24");
-  check.setAttribute("fill", "none");
-  check.setAttribute("stroke", "currentColor");
-  check.setAttribute("stroke-width", "2");
-  check.setAttribute("stroke-linecap", "round");
-  check.setAttribute("stroke-linejoin", "round");
-  check.setAttribute("aria-hidden", "true");
-  const checkPath = document.createElementNS(SVG_NS, "path");
-  checkPath.setAttribute("d", "M20 6L9 17l-5-5");
-  check.append(checkPath);
-  tile.append(check);
-  head.append(tile);
   const headText = text("div", "done-headtext");
   headText.append(text("h2", "state-title", "Scrubbed. All yours."));
   headText.append(text("p", "state-sub",
     [finished.downloadName || displayName, levelLabel(currentLevel), subLabel].filter(Boolean).join(" · ")));
   head.append(headText);
+  const stamp = text("span", "stamp", "CLEAN");
+  stamp.setAttribute("aria-hidden", "true");
+  head.append(stamp, boo("happy", "done-boo", 56));
   wrap.append(head);
 
   const report = renderReport(finished.report);

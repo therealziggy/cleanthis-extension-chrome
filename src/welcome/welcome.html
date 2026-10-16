@@ -10,24 +10,28 @@
 <body>
   <main>
     <header class="hero">
-      <img src="../icons/icon-128.png" alt="" width="56" height="56">
+      <img class="spr bob" src="../sprites/boo-happy.svg" alt="" width="80" height="80">
+      <p class="eyebrow">$ install cleanthis-extension · done</p>
       <h1>CleanThis is in.</h1>
       <p class="tagline">Clean files of hidden threats and check webpages for scams —
         processed by cleanthis.io, controlled entirely by you.</p>
-      <p class="pin-tip">Tip: pin CleanThis to the toolbar (puzzle-piece icon → 📌)
+      <p class="pin-tip">tip: pin CleanThis to the toolbar (puzzle-piece icon → 📌)
         so a scan is always one click away.</p>
     </header>
 
-    <section class="card">
-      <h2>Scan any page — ready now</h2>
+    <section class="card win">
+      <h2 class="win__bar"><span class="win__title">1 · Scan any page — ready now</span></h2>
+      <div class="win__body">
       <p class="help">Click the toolbar icon for a safety verdict on the page you're
         on — security, privacy and legitimacy scores with the same reasons the
         website's report shows. Or right-click any link and choose
         <em>Scan with CleanThis</em>. Nothing is ever scanned without your click.</p>
+      </div>
     </section>
 
-    <section class="card">
-      <h2>Clean risky downloads</h2>
+    <section class="card win">
+      <h2 class="win__bar"><span class="win__title">2 · Clean risky downloads</span></h2>
+      <div class="win__body">
       <label class="toggle">
         <input type="checkbox" id="welcome-intercept">
         <span>Clean matching downloads automatically</span>
@@ -38,10 +42,12 @@
         ever blocked outright. Which file types count is a set of checkboxes in
         settings.</p>
       <p class="help status" id="intercept-status" hidden></p>
+      </div>
     </section>
 
-    <section class="card">
-      <h2>Flagged-site warnings</h2>
+    <section class="card win">
+      <h2 class="win__bar"><span class="win__title">3 · Flagged-site warnings</span></h2>
+      <div class="win__body">
       <label class="toggle">
         <input type="checkbox" id="welcome-flagged">
         <span>Warn before a known-bad site loads</span>
@@ -51,10 +57,11 @@
         machine, and no site is ever blocked outright. Turning it on asks for the
         browser's "tabs" and "webNavigation" permissions in one prompt.</p>
       <p class="help status" id="flagged-status" hidden></p>
+      </div>
     </section>
 
-    <section class="privacy">
-      <h2>Private by wiring, not by promise</h2>
+    <section class="privacy callout callout--ok">
+      <h2 class="callout__title">Private by wiring, not by promise</h2>
       <p class="help">Nothing is sent unless you ask for it. The extension talks only
         to cleanthis.io, collects no analytics, and keeps no history of what you
         visit or clean.</p>

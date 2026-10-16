@@ -9,14 +9,13 @@
 </head>
 <body>
   <main>
-    <div class="card">
+    <div class="card win">
+      <div class="win__bar"><span class="win__title">cleanthis — heads-up</span><span class="win__dots" aria-hidden="true"><span class="wb"></span><span class="wb wb--on"></span></span></div>
+      <div class="card-body">
       <div class="badge" id="badge" aria-hidden="true">
-        <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor"
-             stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 4l9 16H3z"></path>
-          <path d="M12 10v4.4"></path>
-          <path d="M12 17.6h.01"></path>
-        </svg>
+        <div class="traffic"><i class="on-red"></i><i></i><i></i></div>
+        <img class="spr boo-flag" src="../sprites/boo-alarm.svg" alt="" width="56" height="56">
+        <img class="spr boo-doc" src="../sprites/boo-look-right.svg" alt="" width="56" height="56">
       </div>
       <h1 id="title">Hold on. This one's on the flagged list.</h1>
 
@@ -53,6 +52,7 @@
       <p class="fineprint" id="fineprint">
         Proceeding loads the site once. You'll be warned again next time.
       </p>
+      </div>
     </div>
   </main>
 

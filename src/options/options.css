@@ -1,96 +1,56 @@
-/* Options page layout. Shared look lives in ../lib/ui.css. */
+/* Options page — the cleanthis.io look. Shared pieces live in ../lib/ui.css. */
 
 body {
-  padding: 28px 20px;
+  padding: 28px 20px 40px;
   font-size: 14px;
-  line-height: 1.5;
+  line-height: 1.55;
+  background-image: radial-gradient(var(--dot) 1.2px, transparent 1.6px);
+  background-size: 22px 22px;
 }
 
-main {
-  max-width: 640px;
-  margin: 0 auto;
-}
+main { max-width: 680px; margin: 0 auto; display: flex; flex-direction: column; gap: 16px; }
 
-h2 {
-  margin: 0 0 8px;
-  font-size: 15px;
-  color: var(--ct-ink);
-}
+.page-head { gap: 12px; padding-bottom: 14px; margin-bottom: 4px; border-bottom: 2px solid var(--frame); }
+.page-head h1 { margin: 4px 0 0; font-size: 17px; display: flex; align-items: baseline; gap: 8px; }
 
-section {
-  padding: 16px 0;
-  border-top: 1px solid var(--ct-line);
-}
+/* Each section is a window; its h2 is the title bar. */
+section.win > h2.win__bar { margin: 0; font-size: 12.5px; font-weight: 400; }
+section.win > h2.win__bar .win__title { color: var(--ink); }
+section.win .win__body { padding: 14px 16px 16px; }
 
-.toggle {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-weight: 600;
-}
+.toggle { display: flex; align-items: center; gap: 10px; font-family: var(--font-mono); font-size: 13.5px; color: var(--ink); cursor: pointer; }
 
-.help {
-  margin: 8px 0 0;
-  color: var(--ct-muted);
-  font-size: 13px;
-}
+.help { margin: 8px 0 0; color: var(--ink2); font-size: 13px; }
+.help strong { color: var(--ink); }
+.flagged-status { color: var(--amber); }
 
 select { max-width: 420px; }
 
-.type-groups {
-  display: grid;
-  gap: 10px;
-}
+.type-groups { display: grid; gap: 10px; }
 
 .type-group {
   margin: 0;
-  padding: 8px 10px 10px;
-  border: 1px solid var(--ct-line);
-  border-radius: 8px;
+  padding: 8px 12px 10px;
+  border: 2px solid var(--line);
+  border-radius: var(--radius-ctl);
+  background: var(--bg);
 }
 
-.type-group legend {
-  padding: 0 4px;
-  font-size: 12px;
-  font-weight: 600;
-  color: var(--ct-muted);
-}
+.type-group legend { padding: 0 6px; font-family: var(--font-mono); font-size: 12px; color: var(--teal); }
 
 .type-choice {
   display: inline-flex;
   align-items: center;
-  gap: 5px;
-  margin: 2px 12px 2px 0;
-  font-variant-numeric: tabular-nums;
+  gap: 6px;
+  margin: 3px 14px 3px 0;
+  font-family: var(--font-mono);
+  font-size: 12.5px;
+  color: var(--ink2);
   cursor: pointer;
 }
 
-.type-choice input { accent-color: var(--ct-primary); }
+.link { font-size: 13px; }
 
-.toggle input { accent-color: var(--ct-primary); }
+.quota { margin: 0; font-family: var(--font-mono); font-variant-numeric: tabular-nums; color: var(--ink); font-size: 13.5px; }
 
-.link {
-  padding: 0;
-  font: inherit;
-  color: var(--ct-primary-strong);
-  background: none;
-  border: 0;
-  cursor: pointer;
-  text-decoration: underline;
-}
-
-.link:hover:not(:disabled) { background: none; color: var(--ct-primary); }
-
-.quota {
-  margin: 0;
-  font-variant-numeric: tabular-nums;
-  color: var(--ct-text);
-  font-size: 14px;
-  text-align: left;
-}
-
-.version {
-  margin-top: 24px;
-  color: var(--ct-muted);
-  font-size: 12px;
-}
+.version { margin: 8px 0 0; font-family: var(--font-mono); color: var(--muted); font-size: 12px; }

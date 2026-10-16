@@ -1,363 +1,304 @@
-/* CleanThis — shared look for every extension surface (popup, clean page,
-   options, warning). Brand palette matches cleanthis.io: teal primary, deep
-   navy ink, lime accent. Pages layer their own layout CSS on top. */
+/* CleanThis — shared look for every extension surface (popup, clean window,
+   options, welcome, warning). It is the cleanthis.io look: pixel / terminal
+   windows, light-first, Departure Mono for headings and labels, Manrope for
+   reading text, lime for "go", the Boo sprite for mood. Pages layer their own
+   layout CSS on top. Fonts and sprites ship inside the extension — nothing is
+   loaded from the network. */
 
+@font-face { font-family: "Departure Mono"; src: url("../fonts/departure-mono.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: block; }
+@font-face { font-family: "Manrope"; src: url("../fonts/manrope-400.woff2") format("woff2"); font-weight: 400; font-style: normal; font-display: block; }
+@font-face { font-family: "Manrope"; src: url("../fonts/manrope-600.woff2") format("woff2"); font-weight: 600; font-style: normal; font-display: block; }
+@font-face { font-family: "Manrope"; src: url("../fonts/manrope-700.woff2") format("woff2"); font-weight: 700; font-style: normal; font-display: block; }
+
+/* ── Tokens: light is the default, dark swaps the same names ───── */
 :root {
-  --ct-primary: #3fa89b;
-  --ct-primary-strong: #2a7e80;
-  --ct-ink: #1b4d6b;
-  --ct-accent: #a8d85c;
-  --ct-accent-tint: #f2f9e4;
-  --ct-green: #16a34a;
-  --ct-amber: #d97706;
-  --ct-red: #dc2626;
-  --ct-gray: #6b7280;
-  --ct-muted: #64748b;
-  --ct-line: #dbe4e9;
-  --ct-bg: #ffffff;
-  --ct-card: #f7fafb;
-  --ct-text: #17303f;
-  --ct-error-bg: #fef2f2;
-  --ct-error-line: #fecaca;
-  /* Buttons: teal family at ≥4.5:1 against their text in both schemes. */
-  --ct-btn-bg: #2a7e80;
-  --ct-btn-bg-hover: #1f6466;
-  --ct-btn-text: #ffffff;
-  /* Redesign additions (v0.6). The -on-dark trio carries the light value here
-     and brightens in the dark block — #16a34a/#dc2626 don't hold AA on #14232c. */
-  --ct-ring-track: #eef2f3;
-  --ct-green-tint: #dcfce7;
-  --ct-amber-tint: #fef3c7;
-  --ct-amber-soft: #fffbeb;
-  --ct-amber-line: #fde68a;
-  --ct-amber-ink: #b45309;
-  --ct-red-tint: #fee2e2;
-  --ct-dash: #b6cdd0;
-  --ct-faint: #94a3b8;
-  --ct-green-on-dark: #16a34a;
-  --ct-red-on-dark: #dc2626;
-  --ct-red-body-on-dark: #64748b;
+  --bg: #EEECE3; --bg2: #E5E2D6; --surf: #FBFAF5; --surf2: #F3F1E8; --bar: #E1DED1;
+  --frame: #1C2320; --line: #CBC6B5; --hard: #1C2320;
+  --ink: #141A17; --ink2: #38423E; --muted: #535D58;
+  --teal: #1B655D; --lime: #A8D85C; --lime-ink: #3D6B0F; --on-lime: #141A17;
+  --amber: #7A5300; --red: #B42A2A; --on-red: #FFFFFF;
+  --sel: #1C2320; --on-sel: #EEECE3;
+  --red-bg: rgba(180, 42, 42, .08); --amber-bg: rgba(138, 94, 0, .08); --lime-bg: rgba(110, 159, 44, .12); --teal-bg: rgba(27, 101, 93, .08);
+  --dot: rgba(20, 26, 23, .10); --ring: rgba(27, 101, 93, .18);
+  --soft-win: 0 1px 0 rgba(255, 255, 255, .9) inset, 0 18px 36px -18px rgba(28, 35, 32, .32), 0 6px 12px -8px rgba(28, 35, 32, .2);
+  --soft-spr: rgba(28, 35, 32, .3);
+  --soft-btn: rgba(28, 35, 32, .35);
+  --lime-glow: rgba(168, 216, 92, .65);
+  --radius-win: 12px; --radius-ctl: 8px; --radius-sm: 4px; --radius-pill: 999px;
+  --font-mono: "Departure Mono", ui-monospace, "SF Mono", Menlo, Consolas, monospace;
+  --font-body: "Manrope", system-ui, -apple-system, "Segoe UI", sans-serif;
+  color-scheme: light;
 }
 
-/* Dark scheme: system preference (unless the user pinned light) — the
-   explicit [data-theme="dark"] duplicate below must stay IN SYNC. */
+/* Dark: the system preference unless the user pinned light — the explicit
+   [data-theme="dark"] block below must stay IN SYNC with this one. */
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
-    --ct-primary: #4db8aa;
-    --ct-primary-strong: #67c6b9;
-    --ct-ink: #d7e8f1;
-    --ct-accent: #a8d85c;
-    --ct-accent-tint: #2c3a24;
-    --ct-muted: #93a6b2;
-    --ct-line: #33454f;
-    --ct-bg: #14232c;
-    --ct-card: #1b2f3a;
-    --ct-text: #e6eef3;
-    --ct-error-bg: #3f1d1d;
-    --ct-error-line: #7f1d1d;
-    --ct-btn-bg: #4db8aa;
-    --ct-btn-bg-hover: #67c6b9;
-    --ct-btn-text: #0d1f1c;
-    --ct-ring-track: #22333d;
-    --ct-green-tint: #14372a;
-    --ct-amber-tint: #3a2c12;
-    --ct-amber-soft: #2a2317;
-    --ct-amber-line: #5c451c;
-    --ct-amber-ink: #e0a33f;
-    --ct-red-tint: #3f1d1d;
-    --ct-dash: #3c5460;
-    --ct-faint: #6b8391;
-    --ct-green-on-dark: #4ade80;
-    --ct-red-on-dark: #f87171;
-    --ct-red-body-on-dark: #f8b4b4;
+    --bg: #0B100F; --bg2: #0F1614; --surf: #121A18; --surf2: #17211E; --bar: #1A2522;
+    --frame: #34453F; --line: #22302C; --hard: #000000;
+    --ink: #E4F1EB; --ink2: #A9BAB3; --muted: #86988F;
+    --teal: #4FBFB0; --lime: #A8D85C; --lime-ink: #A8D85C; --on-lime: #0B100F;
+    --amber: #F2B33D; --red: #FF6B6B; --on-red: #0B100F;
+    --sel: #4FBFB0; --on-sel: #0B100F;
+    --red-bg: rgba(255, 107, 107, .10); --amber-bg: rgba(242, 179, 61, .10); --lime-bg: rgba(168, 216, 92, .10); --teal-bg: rgba(79, 191, 176, .08);
+    --dot: rgba(143, 224, 211, .08); --ring: rgba(79, 191, 176, .22);
+    --soft-win: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 0 0 1px rgba(143, 224, 211, .04), 0 18px 40px -18px rgba(143, 224, 211, .17), 0 6px 14px -8px rgba(143, 224, 211, .12);
+    --soft-spr: rgba(143, 224, 211, .26);
+    --soft-btn: rgba(143, 224, 211, .24);
+    color-scheme: dark;
   }
 }
 
-/* Explicit dark override (theme toggle) — keep in sync with the media
-   block above. */
 :root[data-theme="dark"] {
-    --ct-primary: #4db8aa;
-    --ct-primary-strong: #67c6b9;
-    --ct-ink: #d7e8f1;
-    --ct-accent: #a8d85c;
-    --ct-accent-tint: #2c3a24;
-    --ct-muted: #93a6b2;
-    --ct-line: #33454f;
-    --ct-bg: #14232c;
-    --ct-card: #1b2f3a;
-    --ct-text: #e6eef3;
-    --ct-error-bg: #3f1d1d;
-    --ct-error-line: #7f1d1d;
-    --ct-btn-bg: #4db8aa;
-    --ct-btn-bg-hover: #67c6b9;
-    --ct-btn-text: #0d1f1c;
-    --ct-ring-track: #22333d;
-    --ct-green-tint: #14372a;
-    --ct-amber-tint: #3a2c12;
-    --ct-amber-soft: #2a2317;
-    --ct-amber-line: #5c451c;
-    --ct-amber-ink: #e0a33f;
-    --ct-red-tint: #3f1d1d;
-    --ct-dash: #3c5460;
-    --ct-faint: #6b8391;
-    --ct-green-on-dark: #4ade80;
-    --ct-red-on-dark: #f87171;
-    --ct-red-body-on-dark: #f8b4b4;
-  }
+  --bg: #0B100F; --bg2: #0F1614; --surf: #121A18; --surf2: #17211E; --bar: #1A2522;
+  --frame: #34453F; --line: #22302C; --hard: #000000;
+  --ink: #E4F1EB; --ink2: #A9BAB3; --muted: #86988F;
+  --teal: #4FBFB0; --lime: #A8D85C; --lime-ink: #A8D85C; --on-lime: #0B100F;
+  --amber: #F2B33D; --red: #FF6B6B; --on-red: #0B100F;
+  --sel: #4FBFB0; --on-sel: #0B100F;
+  --red-bg: rgba(255, 107, 107, .10); --amber-bg: rgba(242, 179, 61, .10); --lime-bg: rgba(168, 216, 92, .10); --teal-bg: rgba(79, 191, 176, .08);
+  --dot: rgba(143, 224, 211, .08); --ring: rgba(79, 191, 176, .22);
+  --soft-win: 0 1px 0 rgba(255, 255, 255, .06) inset, 0 0 0 1px rgba(143, 224, 211, .04), 0 18px 40px -18px rgba(143, 224, 211, .17), 0 6px 14px -8px rgba(143, 224, 211, .12);
+  --soft-spr: rgba(143, 224, 211, .26);
+  --soft-btn: rgba(143, 224, 211, .24);
+  color-scheme: dark;
+}
 
+/* ── Base ───────────────────────────────────────────────────────── */
 * { box-sizing: border-box; }
 
 body {
   margin: 0;
-  font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
-  color: var(--ct-text);
-  background: var(--ct-bg);
+  font-family: var(--font-body);
+  font-size: 14px;
+  line-height: 1.5;
+  color: var(--ink);
+  background: var(--bg);
+  -webkit-font-smoothing: antialiased;
 }
 
-/* ── header shared by all surfaces ─────────────────────────── */
+h1, h2, h3 { font-weight: 400; }
+a { color: var(--teal); text-underline-offset: 3px; }
+a:hover { color: var(--lime-ink); }
+:focus-visible { outline: 2px solid var(--teal); outline-offset: 2px; }
+::selection { background: var(--sel); color: var(--on-sel); }
+[hidden] { display: none !important; }
 
-.ct-header {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  margin-bottom: 14px;
-}
+.mono { font-family: var(--font-mono); letter-spacing: 0; }
+.dots { background-image: radial-gradient(var(--dot) 1.2px, transparent 1.6px); background-size: 22px 22px; }
+.t-lime { color: var(--lime-ink); }
+.t-amber { color: var(--amber); }
+.t-red { color: var(--red); }
+.t-muted { color: var(--muted); }
+.eyebrow { margin: 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.4; color: var(--teal); }
 
-.ct-header img { display: block; border-radius: 4px; }
+/* Pixel art (sprites and 9×9 icons) stays crisp at any size. */
+.spr { display: block; image-rendering: pixelated; image-rendering: crisp-edges; filter: drop-shadow(0 6px 5px var(--soft-spr)); }
+.px { display: block; flex: none; shape-rendering: crispEdges; }
 
-.ct-header h1 {
-  flex: 1;
-  margin: 0;
-  font-size: 17px;
-  letter-spacing: -0.01em;
-  color: var(--ct-ink);
-}
+/* The wordmark: clean[this].io, the "this" inverted. */
+.logo { display: inline-flex; align-items: center; font-family: var(--font-mono); font-size: 17px; line-height: 1; color: var(--ink); white-space: nowrap; }
+.logo b { font-weight: 400; background: var(--sel); color: var(--on-sel); padding: 2px 3px; }
+.logo i { font-style: normal; color: var(--muted); }
 
-.ct-header .ct-surface {
-  font-weight: 500;
-  color: var(--ct-muted);
-}
-
-.ct-header a {
-  color: var(--ct-muted);
-  font-size: 12px;
-  text-decoration: none;
-}
-
-.ct-header a:hover { text-decoration: underline; color: var(--ct-primary); }
-
-/* ── controls ──────────────────────────────────────────────── */
-
+/* ── Buttons ────────────────────────────────────────────────────── */
+/* Every <button> is a pixel button by default; page CSS opts out where a
+   control must look like plain text (links, brand, icon buttons). */
 button {
-  padding: 9px 12px;
-  font: inherit;
-  font-weight: 600;
-  color: var(--ct-btn-text);
-  background: var(--ct-btn-bg);
-  border: 0;
-  border-radius: 8px;
+  display: inline-flex; align-items: center; justify-content: center; gap: 8px;
+  padding: 10px 14px;
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.15; font-weight: 400;
+  color: var(--on-lime); background: var(--lime);
+  border: 2px solid var(--hard); border-radius: var(--radius-ctl);
+  box-shadow: 0 8px 18px -10px var(--lime-glow);
   cursor: pointer;
+  transition: transform .12s ease, box-shadow .12s ease, background-color .12s ease;
+}
+button:hover:not(:disabled) { transform: translateY(-1px); box-shadow: 0 12px 22px -10px var(--lime-glow); }
+button:active:not(:disabled) { transform: translateY(0); box-shadow: none; }
+button:disabled { opacity: .55; cursor: not-allowed; transform: none; box-shadow: none; }
+
+button.secondary, button.quiet {
+  color: var(--ink); background: var(--surf); border-color: var(--frame);
+  box-shadow: 0 8px 16px -12px var(--soft-btn);
+}
+button.secondary:hover:not(:disabled), button.quiet:hover:not(:disabled) { background: var(--surf2); box-shadow: 0 10px 18px -12px var(--soft-btn); }
+
+button.danger, button.danger-act {
+  color: var(--on-red); background: var(--red); border-color: var(--hard);
+  box-shadow: 0 8px 18px -10px rgba(180, 42, 42, .55);
+}
+button.danger:hover:not(:disabled), button.danger-act:hover:not(:disabled) { box-shadow: 0 12px 22px -10px rgba(180, 42, 42, .6); }
+
+/* Text-only controls: a mono link with an underline on hover. */
+button.linklike, button.backlink, button.link {
+  padding: 0; gap: 4px;
+  color: var(--teal); background: transparent; border: 0; border-radius: 0; box-shadow: none;
+  font-family: var(--font-mono); font-size: inherit;
+}
+button.linklike:hover:not(:disabled), button.backlink:hover:not(:disabled), button.link:hover:not(:disabled) {
+  transform: none; box-shadow: none; color: var(--lime-ink); text-decoration: underline; text-underline-offset: 3px;
 }
 
-button:hover:not(:disabled) { background: var(--ct-btn-bg-hover); }
-button:disabled { opacity: 0.55; cursor: default; }
-
-select {
-  width: 100%;
-  padding: 7px;
-  font: inherit;
-  color: inherit;
-  background: var(--ct-bg);
-  border: 1px solid var(--ct-line);
-  border-radius: 8px;
+/* Square icon buttons in headers. */
+button.icon-btn, a.icon-btn {
+  display: inline-grid; place-items: center; width: 30px; height: 30px; padding: 0;
+  color: var(--ink); background: var(--surf); border: 2px solid var(--frame); border-radius: var(--radius-sm);
+  box-shadow: none;
 }
+button.icon-btn:hover:not(:disabled), a.icon-btn:hover { transform: none; box-shadow: none; background: var(--surf2); color: var(--ink); }
 
-/* ── results / verdicts ────────────────────────────────────── */
-
-.result {
-  margin-top: 12px;
-  padding: 10px 12px;
-  background: var(--ct-card);
-  border: 1px solid var(--ct-line);
-  border-radius: 8px;
-  line-height: 1.45;
-  overflow-wrap: anywhere;
+/* ── Fields ─────────────────────────────────────────────────────── */
+input[type="text"], textarea, select {
+  font-family: var(--font-mono); font-size: 13px; line-height: 1.3;
+  color: var(--ink); background: var(--surf);
+  border: 2px solid var(--frame); border-radius: var(--radius-ctl);
+  padding: 9px 11px; min-width: 0;
 }
+input[type="text"]::placeholder, textarea::placeholder { color: var(--muted); opacity: 1; }
+input[type="text"]:focus, textarea:focus, select:focus { outline: none; border-color: var(--teal); box-shadow: 0 0 0 3px var(--ring); }
+select { width: 100%; }
 
-.result.error { border-color: var(--ct-error-line); background: var(--ct-error-bg); }
+/* Native checkboxes keep their semantics; they just take the lime. */
+input[type="checkbox"] { accent-color: var(--lime-ink); width: 16px; height: 16px; margin: 0; flex: none; cursor: pointer; }
 
-.result a { color: var(--ct-primary-strong); }
-
-.progress { color: var(--ct-muted); }
-
-.driver {
-  margin: 6px 0 0;
-  color: var(--ct-muted);
-  font-size: 12px;
+/* ── Window: the framed card with a title bar ───────────────────── */
+.win {
+  background: var(--surf);
+  border: 2px solid var(--frame); border-radius: var(--radius-win); overflow: hidden;
+  box-shadow: var(--soft-win); min-width: 0;
 }
-
-.quota {
-  margin: 12px 0 0;
-  color: var(--ct-muted);
-  font-size: 11px;
-  text-align: center;
+.win--flat { box-shadow: none; }
+.win--red { border-color: var(--red); }
+.win--amber { border-color: var(--amber); }
+.win--lime { border-color: var(--lime-ink); }
+.win__bar {
+  display: flex; align-items: center; gap: 8px; min-height: 28px; padding: 5px 10px;
+  background: var(--bar); border-bottom: 2px solid var(--frame);
+  font-family: var(--font-mono); font-size: 11.5px; color: var(--ink2);
 }
+.win--red > .win__bar { border-bottom-color: var(--red); }
+.win--amber > .win__bar { border-bottom-color: var(--amber); }
+.win__title { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.win__dots { margin-left: auto; display: flex; gap: 5px; flex: none; }
+.wb { display: inline-block; width: 8px; height: 8px; border: 2px solid var(--frame); border-radius: 2px; }
+.wb--on { background: var(--frame); }
+.win__body { padding: 14px; }
 
-/* ── redesign primitives, shared by the popup and the clean window ── */
+/* ── Callout: a framed note (ok / warn / danger) ────────────────── */
+.callout {
+  padding: 12px 13px; border: 2px solid var(--frame); border-radius: var(--radius-ctl);
+  background: var(--surf); color: var(--ink2); font-size: 12.5px; line-height: 1.5;
+}
+.callout__title { margin: 0; font-family: var(--font-mono); font-size: 13.5px; line-height: 1.3; color: var(--ink); }
+.callout__body { margin: 5px 0 0; }
+.callout--ok { border-color: var(--lime-ink); background: var(--lime-bg); }
+.callout--warn { border-color: var(--amber); background: var(--amber-bg); }
+.callout--warn .callout__title { color: var(--amber); }
+.callout--danger { border-color: var(--red); background: var(--red-bg); }
+.callout--danger .callout__title { color: var(--red); }
+.callout--info { border-color: var(--teal); background: var(--teal-bg); }
 
-/* Segmented control (cleaning level). */
+/* ── Segmented control (cleaning level, theme) ──────────────────── */
 .ct-seg {
-  display: flex;
-  gap: 4px;
-  padding: 3px;
-  background: var(--ct-card);
-  border: 1px solid var(--ct-line);
-  border-radius: 9px;
+  display: grid; grid-auto-flow: column; grid-auto-columns: minmax(0, 1fr);
+  border: 2px solid var(--frame); border-radius: var(--radius-ctl); overflow: hidden; background: var(--surf);
 }
-
 .ct-seg button {
-  flex: 1;
-  padding: 7px 4px;
-  font: inherit;
-  font-size: 11.5px;
-  font-weight: 400;
-  color: var(--ct-muted);
-  background: transparent;
-  border: 0;
-  border-radius: 6px;
-  cursor: pointer;
+  padding: 8px 4px; min-height: 34px;
+  font-family: var(--font-mono); font-size: 12px; color: var(--ink2);
+  background: var(--surf); border: 0; border-left: 2px solid var(--frame); border-radius: 0; box-shadow: none;
+}
+.ct-seg button:first-child { border-left: 0; }
+.ct-seg button:hover:not(:disabled) { transform: none; box-shadow: none; color: var(--ink); background: var(--surf2); }
+.ct-seg button[aria-pressed="true"], .ct-seg button[aria-pressed="true"]:hover:not(:disabled) { background: var(--sel); color: var(--on-sel); }
+.ct-seg button:focus-visible { outline-offset: -4px; }
+
+/* ── Toggle switch over a real checkbox ─────────────────────────── */
+.switch { position: relative; flex: none; display: inline-block; width: 40px; height: 22px; }
+.switch input { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+.switch .knob {
+  position: absolute; inset: 0; border: 2px solid var(--frame); border-radius: var(--radius-pill); background: var(--surf2);
+}
+.switch .knob::after {
+  content: ""; position: absolute; top: 2px; left: 2px; width: 14px; height: 14px;
+  border-radius: var(--radius-pill); background: var(--frame); transition: transform .12s steps(2);
+}
+.switch input:checked + .knob { background: var(--lime); }
+.switch input:checked + .knob::after { transform: translateX(18px); background: var(--on-lime); }
+.switch input:focus-visible + .knob { outline: 2px solid var(--teal); outline-offset: 2px; }
+
+/* ── Progress meter: a block bar with a percentage ──────────────── */
+/* JS writes the █/░ run into .ct-meter-bar and the number into .pct. */
+.ct-meter { display: flex; flex-direction: column; gap: 6px; font-family: var(--font-mono); }
+.ct-meter-top { display: flex; align-items: baseline; justify-content: space-between; gap: 12px; }
+.ct-meter .pct { font-size: 22px; line-height: 1; color: var(--ink); font-variant-numeric: tabular-nums; }
+.ct-meter .sub { font-size: 11.5px; color: var(--muted); }
+.ct-meter-bar { font-size: 14px; line-height: 1; letter-spacing: -1px; white-space: nowrap; overflow: hidden; color: var(--line); }
+.ct-meter-bar b { font-weight: 400; color: var(--lime-ink); }
+
+/* ── Step list, read like a scan log ────────────────────────────── */
+.ct-checklist { margin: 0; padding: 0; list-style: none; display: flex; flex-direction: column; gap: 4px; font-family: var(--font-mono); font-size: 12px; line-height: 1.5; }
+.ct-checklist li { display: flex; align-items: baseline; gap: 8px; }
+.ct-checklist .mark { flex: none; width: 26px; color: var(--muted); font-size: 0; white-space: nowrap; }
+.ct-checklist .mark::before { font-size: 12px; content: "[ ]"; }
+.ct-checklist li.done { color: var(--ink2); }
+.ct-checklist li.done .mark::before { content: "[x]"; color: var(--lime-ink); }
+.ct-checklist li.active { color: var(--ink); }
+.ct-checklist li.active .mark::before { content: "[>]"; color: var(--teal); }
+.ct-checklist li.queued { color: var(--muted); }
+.ct-checklist li.active > span:last-child::after { content: "_"; margin-left: 2px; color: var(--lime-ink); animation: ct-blink 1s steps(1) infinite; }
+
+/* ── Score bars: label · █/░ · number (the site's verdict bars) ── */
+.scores { display: flex; flex-direction: column; gap: 8px; font-family: var(--font-mono); }
+.score-row { display: grid; grid-template-columns: 84px minmax(0, 1fr) auto; column-gap: 8px; align-items: baseline; font-size: 12.5px; line-height: 1.35; }
+.score-row .score-name { color: var(--ink2); }
+.score-row .score-bar { letter-spacing: -1px; white-space: nowrap; overflow: hidden; color: var(--line); }
+.score-row .score-bar b { font-weight: 400; color: currentColor; }
+.score-row .score-num { color: var(--ink); font-variant-numeric: tabular-nums; }
+.score-row .score-driver { grid-column: 2 / -1; margin-top: 1px; font-family: var(--font-body); font-size: 11.5px; line-height: 1.4; color: var(--muted); overflow-wrap: anywhere; }
+.score-row .score-cov { color: var(--muted); }
+.score-row.band-green .score-bar b { color: var(--lime-ink); }
+.score-row.band-amber .score-bar b { color: var(--amber); }
+.score-row.band-red .score-bar b { color: var(--red); }
+.score-row.band-none .score-num { color: var(--muted); }
+
+/* ── Traffic light (verdict) ────────────────────────────────────── */
+.traffic { display: flex; flex-direction: column; gap: 3px; padding: 4px; background: var(--bg); border: 2px solid var(--frame); border-radius: var(--radius-sm); flex: none; height: fit-content; }
+.traffic i { display: block; width: 10px; height: 10px; background: var(--line); }
+.traffic .on-red { background: var(--red); box-shadow: 0 0 10px var(--red); }
+.traffic .on-amber { background: var(--amber); box-shadow: 0 0 10px var(--amber); }
+.traffic .on-lime { background: var(--lime); box-shadow: 0 0 10px var(--lime); }
+
+/* ── Verdict stamp ──────────────────────────────────────────────── */
+.stamp {
+  display: inline-block; font-family: var(--font-mono); font-size: 18px; line-height: 1.1; letter-spacing: .08em;
+  padding: 4px 10px; border: 3px solid var(--lime-ink); color: var(--lime-ink); border-radius: var(--radius-ctl);
+  transform: rotate(-8deg); animation: ct-stamp .45s steps(6) both; white-space: nowrap;
 }
 
-.ct-seg button:hover:not([aria-pressed="true"]) { background: transparent; color: var(--ct-text); }
-
-.ct-seg button[aria-pressed="true"] {
-  font-weight: 600;
-  color: var(--ct-btn-text);
-  background: var(--ct-btn-bg);
-}
-
-/* Progress ring. The dash values are driven from JS (2πr = 345.6 at r=55). */
-.ct-ring { position: relative; width: 132px; height: 132px; }
-
-.ct-ring svg { display: block; transform: rotate(-90deg); }
-
-.ct-ring .track { stroke: var(--ct-ring-track); }
-
-.ct-ring .bar {
-  stroke: var(--ct-btn-bg);
-  stroke-linecap: round;
-  transition: stroke-dashoffset 0.18s linear;
-}
-
-.ct-ring-label {
-  position: absolute;
-  inset: 0;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  justify-content: center;
-  text-align: center;
-}
-
-.ct-ring-label .pct {
-  font-weight: 700;
-  font-size: 30px;
-  line-height: 1;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-
-.ct-ring-label .sub { margin-top: 3px; font-size: 11.5px; color: var(--ct-muted); }
-
-/* Step checklist beside/under the ring. */
-.ct-checklist {
-  margin: 0;
-  padding: 0;
-  list-style: none;
-  display: flex;
-  flex-direction: column;
-  gap: 9px;
-  font-size: 12.5px;
-}
-
-.ct-checklist li { display: flex; align-items: center; gap: 10px; }
-
-.ct-checklist .mark {
-  flex: none;
-  width: 18px;
-  height: 18px;
-  border-radius: 50%;
-  border: 2px solid var(--ct-line);
-  box-sizing: border-box;
-  color: #fff;
-  font-weight: 700;
-  font-size: 11px;
-  line-height: 14px;
-  text-align: center;
-}
-
-.ct-checklist li.done .mark { background: var(--ct-green); border-color: var(--ct-green); }
-.ct-checklist li.done { color: var(--ct-muted); }
-.ct-checklist li.active .mark { border-color: var(--ct-btn-bg); }
-.ct-checklist li.active { color: var(--ct-text); font-weight: 600; }
-.ct-checklist li.queued { color: var(--ct-faint); }
-.ct-checklist li.queued .mark { border-color: var(--ct-line); }
-
-/* Verdict / status icon tile. */
-.ct-tile {
-  flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.ct-tile.green { background: var(--ct-green-tint); color: var(--ct-green); }
-.ct-tile.amber { background: var(--ct-amber-tint); color: var(--ct-amber); }
-.ct-tile.red { background: var(--ct-red-tint); color: var(--ct-red); }
-.ct-tile.gray { background: var(--ct-card); color: var(--ct-gray); }
-
-/* Persistent footer strip. */
+/* ── Persistent footer strip ────────────────────────────────────── */
 .ct-foot {
-  display: flex;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 9px 16px;
-  border-top: 1px solid var(--ct-line);
-  background: var(--ct-card);
-  font-size: 11px;
-  color: var(--ct-muted);
+  display: flex; justify-content: space-between; gap: 12px;
+  padding: 8px 14px; border-top: 2px solid var(--frame); background: var(--bar);
+  font-family: var(--font-mono); font-size: 11px; color: var(--muted);
 }
+.ct-foot > span:not(:empty)::before { content: "■ "; color: var(--lime-ink); }
 
-/* Dark scheme: system preference (unless the user pinned light) — the
-   explicit [data-theme="dark"] duplicate below must stay IN SYNC. */
-@media (prefers-color-scheme: dark) {
-  :root:not([data-theme="light"]) .ct-checklist li.done .mark {
-    background: var(--ct-green-on-dark);
-    border-color: var(--ct-green-on-dark);
-    color: #0d1f1c;
-  }
-  :root:not([data-theme="light"]) .ct-tile.green { color: var(--ct-green-on-dark); }
-  :root:not([data-theme="light"]) .ct-tile.red { color: var(--ct-red-on-dark); }
-}
+/* ── Header used by the full-page surfaces ──────────────────────── */
+.ct-header { display: flex; align-items: center; gap: 10px; }
+.ct-header .ct-surface { font-family: var(--font-mono); font-size: 13px; color: var(--muted); }
 
-/* Explicit dark override (theme toggle) — keep in sync with the media
-   block above. */
-:root[data-theme="dark"] .ct-checklist li.done .mark {
-    background: var(--ct-green-on-dark);
-    border-color: var(--ct-green-on-dark);
-    color: #0d1f1c;
-  }
-:root[data-theme="dark"] .ct-tile.green { color: var(--ct-green-on-dark); }
-:root[data-theme="dark"] .ct-tile.red { color: var(--ct-red-on-dark); }
+.bob { animation: ct-bob 1.6s steps(2) infinite; }
 
-/* A system request for less motion is honoured everywhere: the only movement
-   in this UI is the scan ring's sweep and the toggle/segment slides, and none
-   of it carries information the settled state doesn't already show. Written
-   against every element rather than the handful that animate today, so it
-   keeps covering whatever gets added later. */
+@keyframes ct-blink { 50% { opacity: 0; } }
+@keyframes ct-bob { 50% { transform: translateY(-3px); } }
+@keyframes ct-stamp { 0% { opacity: 0; transform: rotate(-8deg) scale(1.6); } 100% { opacity: 1; transform: rotate(-8deg) scale(1); } }
+
+/* A system request for less motion is honoured everywhere: the movement here
+   (button lift, blink, bob, stamp, toggle) carries nothing the settled state
+   doesn't already show. Written against every element so it keeps covering
+   whatever gets added later. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,

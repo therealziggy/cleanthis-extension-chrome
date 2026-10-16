@@ -217,18 +217,18 @@ async function refreshSite() {
 
 // ── theme toggle (system default, explicit override) ──────────
 
+// The website's pixel sun and moon (9×9). Like the site's theme button, the
+// glyph shows the CURRENT theme: sun in light, moon in dark.
 const THEME_GLYPHS = {
-  // shown = what a click switches TO
-  sun: ["M12 8a4 4 0 1 0 0 8a4 4 0 0 0 0-8z", "M12 4V2", "M12 22v-2", "M4 12H2", "M22 12h-2",
-    "M5.6 5.6 4.2 4.2", "M19.8 19.8l-1.4-1.4", "M18.4 5.6l1.4-1.4", "M4.2 19.8l1.4-1.4"],
-  moon: ["M21 12.8A9 9 0 1 1 11.2 3a7 7 0 0 0 9.8 9.8z"],
+  sun: "M4 0h1v1h-1zM1 1h1v1h-1zM7 1h1v1h-1zM3 2h3v1h-3zM2 3h5v1h-5zM0 4h1v1h-1zM2 4h5v1h-5zM8 4h1v1h-1zM2 5h5v1h-5zM3 6h3v1h-3zM1 7h1v1h-1zM7 7h1v1h-1zM4 8h1v1h-1z",
+  moon: "M3 0h3v1h-3zM2 1h3v1h-3zM7 1h1v1h-1zM1 2h3v1h-3zM1 3h3v1h-3zM1 4h3v1h-3zM1 5h4v1h-4zM8 5h1v1h-1zM2 6h6v1h-6zM3 7h4v1h-4z",
 };
 
 // One painter for both controls, so the header glyph and the settings seg
 // can never disagree about the current choice.
 function syncThemeUi() {
   els.themeBtn.textContent = "";
-  els.themeBtn.append(svgIcon(18, theme.effective() === "dark" ? THEME_GLYPHS.sun : THEME_GLYPHS.moon));
+  els.themeBtn.append(pxIcon(16, theme.effective() === "dark" ? THEME_GLYPHS.moon : THEME_GLYPHS.sun));
   const choice = theme.saved() || "system";
   for (const button of els.themeSeg.querySelectorAll("button")) {
     button.setAttribute("aria-pressed", String(button.dataset.themeChoice === choice));
@@ -332,22 +332,31 @@ els.openClean.addEventListener("drop", (event) => {
 document.addEventListener("dragover", (event) => event.preventDefault());
 document.addEventListener("drop", (event) => event.preventDefault());
 
-// ── progress ring ─────────────────────────────────────────────
-// api.scanUrl is one POST with no progress events, so the ring is a bounded
+// ── progress meter ────────────────────────────────────────────
+// api.scanUrl is one POST with no progress events, so the meter is a bounded
 // estimate: ease toward 90% over ~12s, hold there, and only complete when the
 // response actually lands. Honest about what it knows, never stuck at 100%.
+// (Still called "ring" in the harness hook — the name predates the block bar.)
 
-const RING_CIRCUMFERENCE = 345.6; // 2π × r55
+const METER_CELLS = 40;
 let ringTimer = null;
+
+// A run of █ (done) and ░ (to go), the website's progress bar.
+function paintBlocks(node, pct, cells) {
+  // Anything above zero shows at least one block, like the website's bars.
+  const filled = Math.min(cells, Math.ceil((cells * Math.max(0, Math.min(100, pct))) / 100));
+  node.textContent = "";
+  node.append(text("b", null, "█".repeat(filled)), "░".repeat(cells - filled));
+}
 
 function setRing(pct) {
   els.ringPct.textContent = `${Math.round(pct)}%`;
-  els.ringBar.style.strokeDashoffset = String(RING_CIRCUMFERENCE * (1 - pct / 100));
+  paintBlocks(els.ringBar, pct, METER_CELLS);
   const rows = els.scanSteps.querySelectorAll("li");
   rows.forEach((li, i) => {
     const state = pct >= (i + 1) * 25 ? "done" : pct >= i * 25 ? "active" : "queued";
     li.className = state;
-    li.querySelector(".mark").textContent = state === "done" ? "✓" : "";
+    li.querySelector(".mark").textContent = state === "done" ? "done" : state === "active" ? "working" : "waiting";
   });
 }
 
@@ -462,104 +471,66 @@ els.cancelScan.addEventListener("click", () => {
 
 // ── verdict rendering ─────────────────────────────────────────
 
-const GLYPHS = {
-  check: ["M20 6L9 17l-5-5"],
-  warn: ["M12 4l9 16H3z", "M12 10v4", "M12 17.4h.01"],
-  cross: ["M6 6l12 12", "M18 6L6 18"],
-  question: ["M9.3 9a2.8 2.8 0 0 1 5.4 1c0 1.8-2.7 2.4-2.7 4", "M12 17.6h.01"],
-};
-
-// Stroked 24×24 glyph, built with DOM calls (no markup strings — the linter
-// rightly dislikes innerHTML in an extension page).
-function svgIcon(size, paths) {
+// A 9×9 pixel glyph (the website's icon grid), filled with currentColor and
+// built with DOM calls — no markup strings; the linter rightly dislikes
+// innerHTML in an extension page.
+function pxIcon(size, d) {
   const NS = "http://www.w3.org/2000/svg";
   const svg = document.createElementNS(NS, "svg");
+  svg.setAttribute("class", "px");
   svg.setAttribute("width", String(size));
   svg.setAttribute("height", String(size));
-  svg.setAttribute("viewBox", "0 0 24 24");
-  svg.setAttribute("fill", "none");
-  svg.setAttribute("stroke", "currentColor");
-  svg.setAttribute("stroke-width", "2");
-  svg.setAttribute("stroke-linecap", "round");
-  svg.setAttribute("stroke-linejoin", "round");
+  svg.setAttribute("viewBox", "0 0 9 9");
   svg.setAttribute("aria-hidden", "true");
-  for (const d of paths) {
-    const path = document.createElementNS(NS, "path");
-    path.setAttribute("d", d);
-    svg.append(path);
-  }
+  const path = document.createElementNS(NS, "path");
+  path.setAttribute("fill", "currentColor");
+  path.setAttribute("d", d);
+  svg.append(path);
   return svg;
 }
 
+// Boo, the site's mascot, in the mood that fits.
+function boo(mood, className, size) {
+  const img = document.createElement("img");
+  img.className = `spr ${className || ""}`.trim();
+  img.src = `../sprites/boo-${mood}.svg`;
+  img.alt = "";
+  img.width = size;
+  img.height = size;
+  return img;
+}
+
 const VERDICTS = {
-  clean: { tile: "green", glyph: "check", title: "Nothing nasty in here." },
-  suspicious: { tile: "amber", glyph: "warn", title: "Something's off here." },
-  malicious: { tile: "red", glyph: "cross", title: "Nope. Close this tab." },
-  unreachable: { tile: "gray", glyph: "question", title: "Couldn't get a look at it." },
+  clean: { tone: "green", light: "lime", word: "clean", boo: "happy", title: "Nothing nasty in here." },
+  suspicious: { tone: "amber", light: "amber", word: "suspicious", boo: "look-right", title: "Something's off here." },
+  malicious: { tone: "red", light: "red", word: "malicious", boo: "alarm", title: "Nope. Close this tab." },
+  unreachable: { tone: "gray", light: null, word: "unknown", boo: "idle", title: "Couldn't get a look at it." },
 };
 
-function tile(kind, glyph) {
-  const box = text("div", `ct-tile ${kind}`);
-  box.append(svgIcon(24, GLYPHS[glyph]));
+// The site's three-lamp traffic light; `on` is red | amber | lime | null.
+function trafficLight(on) {
+  const box = text("div", "traffic");
+  box.setAttribute("aria-hidden", "true");
+  for (const lamp of ["red", "amber", "lime"]) box.append(text("i", lamp === on ? `on-${lamp}` : null));
   return box;
 }
 
-// One score wheel — the site's ring-gauge geometry (72×72, r=30, stroke 7),
-// DOM-built like every other SVG here. Band color rides a class on the wrap;
-// the arc and number pick it up via currentColor.
-function wheel(state, name) {
-  const NS = "http://www.w3.org/2000/svg";
-  const wrap = text("div", `wheel band-${state.band}`);
-  const svg = document.createElementNS(NS, "svg");
-  svg.setAttribute("viewBox", "0 0 72 72");
-  svg.setAttribute("width", "72");
-  svg.setAttribute("height", "72");
-  svg.setAttribute("aria-hidden", "true");
-  const circumference = 2 * Math.PI * 30;
+// One score row — the website's verdict bars: name · █/░ out of ten · n/100,
+// with the per-axis reason underneath. Band color rides a class on the row.
+const SCORE_CELLS = 10;
 
-  const track = document.createElementNS(NS, "circle");
-  for (const [attr, val] of [["cx", "36"], ["cy", "36"], ["r", "30"], ["fill", "none"], ["stroke-width", "7"]]) {
-    track.setAttribute(attr, val);
-  }
-  track.setAttribute("class", "wheel-track");
-  svg.append(track);
-
-  if (!state.none) {
-    const arc = document.createElementNS(NS, "circle");
-    for (const [attr, val] of [["cx", "36"], ["cy", "36"], ["r", "30"], ["fill", "none"], ["stroke-width", "7"], ["stroke-linecap", "round"]]) {
-      arc.setAttribute(attr, val);
-    }
-    arc.setAttribute("class", "wheel-arc");
-    const filled = (circumference * Math.max(0, Math.min(100, Number(state.value)))) / 100;
-    arc.setAttribute("stroke-dasharray", `${filled.toFixed(1)} ${circumference.toFixed(1)}`);
-    arc.setAttribute("transform", "rotate(-90 36 36)");
-    svg.append(arc);
-  }
-
-  const num = document.createElementNS(NS, "text");
-  num.setAttribute("x", "36");
-  num.setAttribute("y", "41");
-  num.setAttribute("text-anchor", "middle");
-  num.setAttribute("class", "wheel-num");
-  num.textContent = state.value;
-  svg.append(num);
-
-  if (!state.none) {
-    const denom = document.createElementNS(NS, "text");
-    denom.setAttribute("x", "36");
-    denom.setAttribute("y", "52");
-    denom.setAttribute("text-anchor", "middle");
-    denom.setAttribute("class", "wheel-denom");
-    denom.textContent = "/ 100";
-    svg.append(denom);
-  }
-
-  wrap.append(svg);
-  wrap.append(text("div", "wheel-name", name));
-  const driver = text("div", "wheel-driver", state.driver);
-  if (state.suffix) driver.append(text("span", "wheel-cov", state.suffix));
-  wrap.append(driver);
-  return wrap;
+function scoreRow(state, name) {
+  const row = text("div", `score-row band-${state.band}`);
+  row.append(text("span", "score-name", name.toLowerCase()));
+  const bar = text("span", "score-bar");
+  bar.setAttribute("aria-hidden", "true");
+  paintBlocks(bar, state.none ? 0 : Number(state.value), SCORE_CELLS);
+  row.append(bar);
+  row.append(text("span", "score-num", state.none ? state.value : `${state.value}/100`));
+  const driver = text("span", "score-driver", state.driver);
+  if (state.suffix) driver.append(text("span", "score-cov", state.suffix));
+  row.append(driver);
+  return row;
 }
 
 function reportUrl(url) {
@@ -587,26 +558,31 @@ function renderVerdict(url, tabId, result) {
   // The one view that had no way home (error and settings both have one).
   els.verdict.append(actionButton("backlink", "‹ Back", () => showView("idle")));
 
+  // One window, like the website's verdict card: traffic light, verdict,
+  // host and Boo on top; the three score bars underneath.
+  const card = text("div", `win verdict-win tone-${spec.tone}`);
   const head = text("div", "verdict-head");
-  head.append(tile(spec.tile, spec.glyph));
-  const headText = document.createElement("div");
-  headText.style.minWidth = "0";
+  head.append(trafficLight(spec.light));
+  const headText = text("div", "verdict-headtext");
+  headText.append(text("p", `verdict-word tone-${spec.tone}`, spec.word));
   headText.append(text("h2", "verdict-title", spec.title));
   const sub = text("p", "verdict-sub");
   sub.append(text("span", "host", new URL(url).hostname));
   sub.append(text("span", "when", "· just now"));
   headText.append(sub);
   head.append(headText);
-  els.verdict.append(head);
+  head.append(boo(spec.boo, "verdict-boo", 44));
+  card.append(head);
 
-  // The site's three score wheels, always — per-axis reason under each wheel,
-  // one overall statement below (same strings as the website's report).
+  // The site's three scores, always — per-axis reason under each bar, one
+  // overall statement below (same strings as the website's report).
   const scores = result.scores || {};
-  const wheels = text("div", "wheels");
+  const bars = text("div", "scores");
   for (const [key, name] of [["security", "Security"], ["privacy", "Privacy"], ["legitimacy", "Legitimacy"]]) {
-    wheels.append(wheel(vlib.wheelState(scores[key]), name));
+    bars.append(scoreRow(vlib.wheelState(scores[key]), name));
   }
-  els.verdict.append(wheels);
+  card.append(bars);
+  els.verdict.append(card);
 
   const statement = vlib.statementFor(verdict, result.findings);
   els.verdict.append(text("p", `statement ${statement.strong ? "strong" : ""}`.trim(), statement.text));
@@ -642,7 +618,7 @@ function renderVerdict(url, tabId, result) {
       ? "Good thing you checked before visiting."
       : "You can still proceed — we'll just look at you funny."));
   } else {
-    // The moment deep matters is right after quick results — the wheels above
+    // The moment deep matters is right after quick results — the scores above
     // may already say "limited (Quick scan)". Malicious keeps its two actions.
     const deep = text("p", "deep-line");
     deep.append("Need a deeper look? ");
@@ -727,10 +703,12 @@ async function renderError(kind, err) {
   if (kind === "generic") body = humanize(err);
 
   els.error.textContent = "";
-  const block = text("div", `error-block ${spec.tone === "hard" ? "hard" : ""}`.trim());
-  block.append(text("h2", "error-title", spec.title));
-  block.append(text("p", "error-body", body));
-  els.error.append(block);
+  const head = text("div", "error-head");
+  const block = text("div", `error-block callout ${spec.tone === "hard" ? "hard callout--danger" : "callout--warn"}`);
+  block.append(text("h2", "error-title callout__title", spec.title));
+  block.append(text("p", "error-body callout__body", body));
+  head.append(block, boo(spec.tone === "hard" ? "alarm" : "idle", "error-boo", 44));
+  els.error.append(head);
 
   const actions = text("div", "error-actions");
   if (spec.retry) actions.append(actionButton("", "Try again", () => startScan(false, lastTarget)));

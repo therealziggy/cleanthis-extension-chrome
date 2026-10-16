@@ -9,13 +9,17 @@
 </head>
 <body>
   <main>
-    <header class="ct-header">
-      <img src="../icons/icon-32.png" alt="" width="20" height="20">
-      <h1>CleanThis <span class="ct-surface">· Settings</span></h1>
+    <header class="ct-header page-head">
+      <img class="spr" src="../sprites/boo-happy.svg" alt="" width="40" height="40">
+      <div>
+        <p class="eyebrow">$ cleanthis --settings</p>
+        <h1><span class="logo">clean<b>this</b><i>.io</i></span> <span class="ct-surface">· settings</span></h1>
+      </div>
     </header>
 
-    <section>
-      <h2>Download protection</h2>
+    <section class="win">
+      <h2 class="win__bar"><span class="win__title">Download protection</span><span class="win__dots" aria-hidden="true"><span class="wb"></span><span class="wb wb--on"></span></span></h2>
+      <div class="win__body">
       <label class="toggle">
         <input type="checkbox" id="intercept-enabled">
         <span>Clean matching downloads automatically</span>
@@ -26,10 +30,12 @@
         You can always choose to download the original instead — nothing is ever blocked
         outright.
       </p>
+      </div>
     </section>
 
-    <section>
-      <h2>Flagged-site warnings</h2>
+    <section class="win">
+      <h2 class="win__bar"><span class="win__title">Flagged-site warnings</span><span class="win__dots" aria-hidden="true"><span class="wb"></span><span class="wb wb--on"></span></span></h2>
+      <div class="win__body">
       <label class="toggle">
         <input type="checkbox" id="flagged-enabled">
         <span>Warn before a known-bad site loads</span>
@@ -44,10 +50,12 @@
         the address of a page as it starts to load, locally.
       </p>
       <p class="help flagged-status" id="flagged-status" hidden></p>
+      </div>
     </section>
 
-    <section>
-      <h2>Document links</h2>
+    <section class="win">
+      <h2 class="win__bar"><span class="win__title">Document links</span><span class="win__dots" aria-hidden="true"><span class="wb"></span><span class="wb wb--on"></span></span></h2>
+      <div class="win__body">
       <label class="toggle">
         <input type="checkbox" id="doc-ask-enabled">
         <span>Ask before opening document links</span>
@@ -60,25 +68,30 @@
         original anyway. Uses the same on-device check as flagged-site warnings.
       </p>
       <p class="help flagged-status" id="doc-ask-status" hidden></p>
+      </div>
     </section>
 
-    <section>
-      <h2>File types to clean automatically</h2>
+    <section class="win">
+      <h2 class="win__bar"><span class="win__title">File types to clean automatically</span><span class="win__dots" aria-hidden="true"><span class="wb"></span><span class="wb wb--on"></span></span></h2>
+      <div class="win__body">
       <div id="type-groups" class="type-groups" aria-live="polite"></div>
       <p class="help">
         Only ticked download types are intercepted. The list comes from what
         cleanthis.io supports, so new types appear here on their own.
         <button type="button" id="restore-exts" class="link">Restore recommended</button>
       </p>
+      </div>
     </section>
 
-    <section>
-      <h2>Daily allowance</h2>
+    <section class="win">
+      <h2 class="win__bar"><span class="win__title">Daily allowance</span><span class="win__dots" aria-hidden="true"><span class="wb"></span><span class="wb wb--on"></span></span></h2>
+      <div class="win__body">
       <p id="quota" class="quota">No requests yet.</p>
       <p class="help">
         cleanthis.io allows a set number of scans and files per day. The extension pauses
         rather than retrying when the allowance runs out.
       </p>
+      </div>
     </section>
 
     <p class="version" id="version"></p>
