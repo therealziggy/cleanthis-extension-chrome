@@ -99,6 +99,14 @@
     }
   }
 
+  // A stored allowance figure is only true until its reset time: yesterday's
+  // "0 left" must not greet the user on a day with a full allowance.
+  function liveQuota(quota, now) {
+    if (!quota) return null;
+    if (quota.resetEpoch && quota.resetEpoch * 1000 <= now) return null;
+    return quota;
+  }
+
   async function request(path, { method = "GET", headers = {}, body, bucket, signal } = {}) {
     await syncCooldown();
     const waitMs = cooldownRemaining();
@@ -314,6 +322,7 @@
     waitForJob,
     resolveUrl,
     getLastQuota: (bucket) => lastQuota[bucket] || null,
+    liveQuota,
     _cooldownRemaining: cooldownRemaining,
     _noteRateLimit: noteRateLimit,
     _resetForTests() {

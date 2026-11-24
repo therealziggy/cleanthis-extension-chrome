@@ -392,3 +392,22 @@ test("waitForJob gives up after its timeout", async () => {
   });
   assert.ok(calls.length > 0, "it should have polled at least once");
 });
+
+// ── liveQuota: yesterday's number is not today's ──────────────
+
+test("liveQuota keeps a figure whose reset time is still ahead", () => {
+  const q = { limit: 25, remaining: 3, resetEpoch: 2000 };
+  assert.equal(api.liveQuota(q, 1999 * 1000), q);
+});
+
+test("liveQuota drops a figure once its reset time has passed", () => {
+  assert.equal(api.liveQuota({ limit: 25, remaining: 0, resetEpoch: 2000 }, 2000 * 1000), null);
+  assert.equal(api.liveQuota({ limit: 25, remaining: 0, resetEpoch: 2000 }, 2500 * 1000), null);
+});
+
+test("liveQuota keeps a figure with no reset time, and reads nothing as nothing", () => {
+  const q = { limit: 25, remaining: 3, resetEpoch: null };
+  assert.equal(api.liveQuota(q, 1e15), q);
+  assert.equal(api.liveQuota(undefined, 1), null);
+  assert.equal(api.liveQuota(null, 1), null);
+});

@@ -116,7 +116,7 @@ async function refreshPending() {
 
     const button = document.createElement("button");
     button.type = "button";
-    button.className = action.label && /unsafe/i.test(action.label) ? "danger" : "";
+    button.className = action.danger === true || (action.label && /unsafe/i.test(action.label)) ? "danger" : "";
     button.textContent = action.label || "Continue";
     button.addEventListener("click", async () => {
       button.disabled = true;
@@ -157,8 +157,11 @@ async function refreshPending() {
 async function refreshQuota() {
   try {
     const stored = await ext.storage.local.get(["quota_scan", "quota_upload"]);
-    els.quotaScans.textContent = stored.quota_scan ? `${stored.quota_scan.remaining} scans left` : "";
-    els.quotaFiles.textContent = stored.quota_upload ? `${stored.quota_upload.remaining} files left` : "";
+    // A figure past its reset time is yesterday's — show nothing, not a lie.
+    const scans = api.liveQuota(stored.quota_scan, Date.now());
+    const files = api.liveQuota(stored.quota_upload, Date.now());
+    els.quotaScans.textContent = scans ? `${scans.remaining} scans left` : "";
+    els.quotaFiles.textContent = files ? `${files.remaining} files left` : "";
   } catch (_) {
     /* the quota line is informational only */
   }
@@ -500,12 +503,22 @@ function boo(mood, className, size) {
   return img;
 }
 
+// "No known threats", not "clean": the verdict only means no source CONFIRMED
+// a threat, and the three scores underneath may still carry cautions — the
+// website words it the same way, for the same reason.
 const VERDICTS = {
-  clean: { tone: "green", light: "lime", word: "clean", boo: "happy", title: "Nothing nasty in here." },
+  clean: { tone: "green", light: "lime", word: "no known threats", boo: "happy", title: "Nothing flagged here." },
   suspicious: { tone: "amber", light: "amber", word: "suspicious", boo: "look-right", title: "Something's off here." },
   malicious: { tone: "red", light: "red", word: "malicious", boo: "alarm", title: "Nope. Close this tab." },
-  unreachable: { tone: "gray", light: null, word: "unknown", boo: "idle", title: "Couldn't get a look at it." },
+  unreachable: { tone: "gray", light: null, word: "couldn't load", boo: "idle", title: "Couldn't get a look at it." },
+  // The page may be fine; the sources we ask did not answer.
+  unknown: { tone: "gray", light: null, word: "no clear signal", boo: "idle", title: "Couldn't get an answer." },
 };
+
+// A clean verdict whose one sentence is a warning (a spam-distributed
+// installer link, a page that reads like a scam): nothing is listed, but a
+// happy face beside "do not run it" would be the wrong picture.
+const CLEAN_CAUTION = { tone: "amber", light: "amber", word: "no known threats — but", boo: "look-right", title: "Not flagged, but read this." };
 
 // The site's three-lamp traffic light; `on` is red | amber | lime | null.
 function trafficLight(on) {
@@ -551,8 +564,11 @@ function actionButton(className, label, onClick) {
 }
 
 function renderVerdict(url, tabId, result) {
-  const verdict = VERDICTS[result.verdict] ? result.verdict : "unreachable";
-  const spec = VERDICTS[verdict];
+  const verdict = VERDICTS[result.verdict] ? result.verdict : "unknown";
+  const statement = vlib.statementFor(verdict, result.findings, result.scores);
+  let spec = verdict === "clean" && statement.caution ? CLEAN_CAUTION : VERDICTS[verdict];
+  // A pasted address has no tab to close.
+  if (verdict === "malicious" && tabId === null) spec = { ...spec, title: "Nope. Don't open this one." };
   els.verdict.textContent = "";
 
   // The one view that had no way home (error and settings both have one).
@@ -568,7 +584,7 @@ function renderVerdict(url, tabId, result) {
   headText.append(text("h2", "verdict-title", spec.title));
   const sub = text("p", "verdict-sub");
   sub.append(text("span", "host", new URL(url).hostname));
-  sub.append(text("span", "when", "· just now"));
+  sub.append(text("span", "when", `· ${vlib.whenLabel(result, Date.now())}`));
   headText.append(sub);
   head.append(headText);
   head.append(boo(spec.boo, "verdict-boo", 44));
@@ -584,7 +600,6 @@ function renderVerdict(url, tabId, result) {
   card.append(bars);
   els.verdict.append(card);
 
-  const statement = vlib.statementFor(verdict, result.findings);
   els.verdict.append(text("p", `statement ${statement.strong ? "strong" : ""}`.trim(), statement.text));
 
   const actions = text("div", "verdict-actions");
@@ -642,6 +657,7 @@ function errorKindFor(err) {
 // The quota body names the actual reset time when the server has told us one.
 function quotaBody(stored) {
   const resetEpoch = stored && stored.quota_scan && stored.quota_scan.resetEpoch;
+  // (A reset time already behind us falls through to the timeless line.)
   if (resetEpoch) {
     const msLeft = resetEpoch * 1000 - Date.now();
     if (msLeft > 0) {

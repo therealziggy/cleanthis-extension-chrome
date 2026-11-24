@@ -16,6 +16,7 @@
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 const api = self.CleanThisApi;
+const reportLib = self.CleanThisReport;
 
 const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
 
@@ -76,9 +77,12 @@ function humanize(err) {
 async function refreshQuota() {
   try {
     const stored = await ext.storage.local.get(["quota_scan", "quota_upload"]);
+    // A figure past its reset time is yesterday's — show nothing, not a lie.
+    const scans = api.liveQuota(stored.quota_scan, Date.now());
+    const files = api.liveQuota(stored.quota_upload, Date.now());
     const parts = [];
-    if (stored.quota_scan) parts.push(`${stored.quota_scan.remaining} scans left`);
-    if (stored.quota_upload) parts.push(`${stored.quota_upload.remaining} files left`);
+    if (scans) parts.push(`${scans.remaining} scans left`);
+    if (files) parts.push(`${files.remaining} files left`);
     els.quota.textContent = parts.join(" · ");
   } catch (_) {
     /* the quota line is informational only */
@@ -401,10 +405,12 @@ async function runJob({ submit, displayName, subLabel, urlMode }) {
       // repeat it as a notification.
       progress.stop();
       await settle();
+      // The server says whether the file itself is the reason; when it is,
+      // "try again" would only send the user round the same loop.
+      const copy = reportLib.failureCopy(finished.error, finished.retryable);
       const wrap = document.createDocumentFragment();
-      wrap.append(toneBlock("", "Cleaning failed.",
-        `${finished.error || "The server couldn't process this one."} Your upload was erased either way.`));
-      wrap.append(anotherButton("Clean another"));
+      wrap.append(toneBlock(copy.retry ? "" : "hard", copy.title, copy.body));
+      wrap.append(anotherButton(copy.retry ? "Try again" : "Clean another"));
       show(wrap);
     }
   } catch (err) {
@@ -515,25 +521,54 @@ function anotherButton(label) {
   return row;
 }
 
+// The website's link warning, in the same words: which links, where in the
+// file, and what is — and is not — wrong with the file itself.
+const MAX_BAD_LINK_ROWS = 3;
+
+function badLinkBlock(badLinks) {
+  const block = text("div", "block hard linkwarn");
+  block.setAttribute("role", "alert");
+  block.append(text("p", "block-title", badLinks.length === 1
+    ? "This file contains a link to a site flagged as malicious"
+    : "This file contains links to sites flagged as malicious"));
+  for (const link of badLinks.slice(0, MAX_BAD_LINK_ROWS)) {
+    block.append(text("p", "linkwarn-row", `${link.where ? `${link.where}: ` : ""}${link.url || ""}`));
+  }
+  if (badLinks.length > MAX_BAD_LINK_ROWS) {
+    block.append(text("p", "linkwarn-row", `+${badLinks.length - MAX_BAD_LINK_ROWS} more`));
+  }
+  block.append(text("p", "block-body",
+    "The file itself was fully cleaned, but opening that link could take you to a phishing or malware site."));
+  return block;
+}
+
 function renderDone(finished, displayName, subLabel, job, settle) {
   const wrap = document.createDocumentFragment();
 
+  // What this result may claim: a file that still links to a flagged site is
+  // never "CLEAN", and neither is a format we only scan (lib/report.js).
+  const outcome = reportLib.outcome(finished.report);
+  const badLinks = reportLib.badLinks(finished.report);
+
   const head = text("div", "done-head");
   const headText = text("div", "done-headtext");
-  headText.append(text("h2", "state-title", "Scrubbed. All yours."));
+  headText.append(text("h2", "state-title", outcome.title));
   headText.append(text("p", "state-sub",
     [finished.downloadName || displayName, levelLabel(currentLevel), subLabel].filter(Boolean).join(" · ")));
   head.append(headText);
-  const stamp = text("span", "stamp", "CLEAN");
+  const stamp = text("span", `stamp stamp--${outcome.tone}`, outcome.stamp);
   stamp.setAttribute("aria-hidden", "true");
-  head.append(stamp, boo("happy", "done-boo", 56));
+  head.append(stamp, boo(outcome.boo, "done-boo", 56));
   wrap.append(head);
+
+  if (badLinks.length) wrap.append(badLinkBlock(badLinks));
 
   const report = renderReport(finished.report);
   if (report) wrap.append(report);
 
   const actions = text("div", "done-actions");
-  const save = text("button", null, "Save cleaned file");
+  // With a flagged link inside, saving is a decision, and the button says so.
+  const save = text("button", badLinks.length ? "danger" : null, badLinks.length ? "Save anyway" : outcome.stamp === "SCANNED" ? "Save file" : "Save cleaned file");
   save.type = "button";
   const note = text("span", "driver");
   save.addEventListener("click", async () => {
@@ -568,8 +603,10 @@ function renderDone(finished, displayName, subLabel, job, settle) {
 
   // A cleaned PDF can open right in the browser (?inline=1 — PDF-only on the
   // server, sniffed there). Save stays the FIRST button in #clean-result.
+  // Not offered beside a flagged link: opening the copy in a tab would put
+  // that link one click away, which is the thing the warning is about.
   const isPdf = /\.pdf$/i.test(finished.downloadName || displayName || "");
-  if (isPdf) {
+  if (isPdf && !badLinks.length) {
     const open = text("button", "secondary", "Open cleaned copy");
     open.type = "button";
     open.addEventListener("click", async () => {

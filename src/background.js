@@ -13,13 +13,14 @@
 // Chrome loads the shared libraries into the worker here; Firefox lists them
 // in the manifest instead (event pages have no importScripts).
 if (typeof importScripts === "function") {
-  importScripts("lib/api.js", "lib/intercept.js", "lib/filetypes.js", "lib/flagged.js", "lib/docs.js", "lib/scantarget.js");
+  importScripts("lib/api.js", "lib/intercept.js", "lib/filetypes.js", "lib/flagged.js", "lib/docs.js", "lib/scantarget.js", "lib/report.js");
 }
 
 const ext = typeof browser !== "undefined" ? browser : chrome;
 const api = self.CleanThisApi;
 const intercept = self.CleanThisIntercept;
 const fileTypes = self.CleanThisFileTypes;
+const reportLib = self.CleanThisReport;
 
 const DEFAULT_SETTINGS = {
   interceptEnabled: false,
@@ -130,7 +131,7 @@ async function refreshBadge() {
   try {
     const { [ACTIONS_KEY]: actions = {} } = await actionStore.get(ACTIONS_KEY);
     const entries = Object.values(actions);
-    const failed = entries.some((a) => a && a.kind === "download-original");
+    const failed = entries.some((a) => a && (a.kind === "download-original" || a.danger === true));
     const text = failed ? "!" : entries.length ? String(entries.length) : "";
     await ext.action.setBadgeText({ text });
     if (text) await ext.action.setBadgeBackgroundColor({ color: failed ? "#dc2626" : "#d97706" });
@@ -257,10 +258,30 @@ function keepAlive() {
   };
 }
 
+// A cleaned file that still carries a link (or QR code) to a site flagged as
+// malicious. The file itself is rebuilt, but saving it without a word would
+// put that link one click away under a "cleaned ✓" — so it is never saved on
+// its own. It waits as an offer the user has to take, exactly like the
+// website's "Download anyway", and counts as a red "!" on the badge.
+function offerBadLinkFile(jobId, token, name) {
+  const why = "Cleaned, but a link inside it leads to a site flagged as malicious. Don't open that link.";
+  return notify("⚠️ Cleaned — but it contains a bad link", `${name}: ${why}`, {
+    kind: "download-cleaned",
+    jobId,
+    token,
+    label: "Save anyway",
+    danger: true,
+    name,
+    why,
+  });
+}
+
 async function watchJob({ jobId, downloadToken, name }) {
   try {
     const job = await api.waitForJob(jobId, downloadToken, { onTick: keepAlive() });
-    if (job.state === "completed") {
+    if (job.state === "completed" && reportLib.badLinks(job.report).length) {
+      await offerBadLinkFile(jobId, downloadToken, name || "Your file");
+    } else if (job.state === "completed") {
       await notify("File cleaned ✓", `${name || "Your file"} is ready.`, {
         kind: "download-cleaned",
         jobId,
@@ -571,6 +592,15 @@ async function considerDownload(item) {
       return;
     }
 
+    // The link check runs on the CLEANED file. A flagged link inside it holds
+    // the save back for the user's say-so; the original stays cancelled (it
+    // carries the same link, and whatever else the clean removed).
+    if (reportLib.badLinks(job.report).length) {
+      await finish();
+      await offerBadLinkFile(submission.jobId, submission.downloadToken, job.downloadName || label);
+      return;
+    }
+
     // downloads.download resolves once the download has STARTED, so the
     // notification says what is actually true at that point.
     await ext.downloads.download({
@@ -694,7 +724,7 @@ ext.windows.onRemoved.addListener(async (windowId) => {
 const flagged = self.CleanThisFlagged;
 
 // The decoded list is rebuilt only when the stored version changes.
-let flaggedIndex = { version: null, index: null };
+let flaggedIndex = { version: null, indexes: null };
 
 let flaggedRefreshInFlight = null;
 // A forced call joining an unforced in-flight fetch just joins it — a fetch
@@ -728,7 +758,9 @@ async function flaggedVerdictFor(url, { consume }) {
 
   const list = stored[flagged.LIST_KEY];
   if (flagged.listStale(list)) refreshFlaggedList(); // background top-up; this check uses what's here
-  if (!list || !Array.isArray(list.entries) || !list.entries.length) return null;
+  // Any tier counts: an empty wall tier must not switch off the heads-up
+  // hosts and the dangerous-link tier that came in the same list.
+  if (!flagged.hasEntries(list)) return null;
 
   if (flaggedIndex.version !== list.version || !flaggedIndex.indexes) {
     flaggedIndex = { version: list.version, indexes: flagged.buildIndexes(list) };

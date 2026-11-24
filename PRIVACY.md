@@ -1,6 +1,6 @@
 # Privacy policy — CleanThis browser extension
 
-_Last updated: 24 August 2026_
+_Last updated: 24 November 2026_
 
 The extension is a client for [cleanthis.io](https://cleanthis.io). It has no servers,
 accounts, or storage of its own beyond your settings, and it talks to no one except
@@ -15,6 +15,7 @@ Nothing is sent unless you ask for it, or you turn on download protection yourse
 | **Clean a file** | The file you picked | Only when you pick it |
 | **Clean this file** (a document you're viewing) | The web address of the document | Only when you click *Clean this file* / *Clean it first* |
 | **Scan this page** | The web address of the active tab | Only when you click *Scan this page* |
+| **Scan another page** (the box in the popup) | The web address you typed or pasted | Only when you press Enter or the arrow button |
 | **Scan with CleanThis** (right-click menu) | The link or selected text you right-clicked | Only when you click the menu item |
 | **Download protection** | The web address of a matching download | Only while you have it switched on |
 | **Report a mistake** (flagged-site warning page) | The blocked address and your optional note | Only when you press Send |

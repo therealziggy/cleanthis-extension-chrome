@@ -136,6 +136,24 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
   });
   await shootPopup("popup-verdict-malicious");
 
+  // verdict (clean, but the one sentence is a warning) — a cached result too,
+  // so the "checked N h ago" label is on show instead of "just now"
+  await popup.evaluate(() => {
+    self.__ctPopup.renderVerdict("https://files-mirror.example/setup.exe", null, {
+      verdict: "clean",
+      cached: true,
+      computedAt: Date.now() - 3 * 3600 * 1000,
+      findings: [{ source: "cleanthis_payload_url", result: "notice", details: {} }],
+      scores: {
+        security: { value: 74, band: "amber", coverage: "full", driver: "Link to an executable download" },
+        privacy: { value: 90, band: "green", coverage: "partial", driver: "Few third parties" },
+        legitimacy: { value: 61, band: "amber", coverage: "full", driver: "Recently registered domain" },
+      },
+    });
+    self.__ctPopup.showView("verdict");
+  });
+  await shootPopup("popup-verdict-caution");
+
   // settings
   await popup.click("#settings-btn");
   await popup.waitForSelector("#view-settings:not([hidden])");
@@ -211,6 +229,62 @@ const BASE = process.env.API_BASE || "http://localhost:3000";
   await clean.waitForSelector("#clean-result .done-head");
   await shoot(clean, "clean-done", "light");
   await shoot(clean, "clean-done", "dark");
+
+  // done, but a link inside the cleaned file leads to a flagged site
+  await loadClean();
+  await clean.evaluate(() => {
+    self.CleanThisApi.sanitizeFile = async () => ({ jobId: "demo", downloadToken: "demo" });
+    self.CleanThisApi.waitForJob = async () => ({
+      state: "completed",
+      downloadUrl: "/api/download/demo?sig=demo",
+      downloadName: "invoice-8841.pdf",
+      report: {
+        cleaningStrength: "re_encoded",
+        changes: [
+          { type: "cleaning_strength", label: "Full reconstruction — rebuilt from safe content only." },
+          { type: "javascript", label: "JavaScript removed from the PDF", danger: true },
+          { type: "file_links", label: "1 link or QR code in this file leads to a site flagged as malicious — don't open it", danger: true },
+        ],
+        links: { items: [{ url: "https://secure-login-verify.example/account", where: "QR code on page 1", kind: "qr", verdict: "malicious" }] },
+      },
+    });
+  });
+  await clean.setInputFiles("#file-input", { ...DEMO_FILE, name: "invoice-8841.pdf", mimeType: "application/pdf" });
+  await clean.waitForSelector("#clean-result .done-head");
+  await shoot(clean, "clean-done-badlink", "light");
+  await shoot(clean, "clean-done-badlink", "dark");
+
+  // done, for a format that is scanned but not rebuilt
+  await loadClean();
+  await clean.evaluate(() => {
+    self.CleanThisApi.sanitizeFile = async () => ({ jobId: "demo", downloadToken: "demo" });
+    self.CleanThisApi.waitForJob = async () => ({
+      state: "completed",
+      downloadUrl: "/api/download/demo?sig=demo",
+      downloadName: "brand-font.woff2",
+      report: {
+        cleaningStrength: "content_preserved",
+        changes: [{ type: "cleaning_strength", label: "Passed through: scanned for viruses and known threats, but not rebuilt." }],
+      },
+    });
+  });
+  await clean.setInputFiles("#file-input", { ...DEMO_FILE, name: "brand-font.woff2", mimeType: "font/woff2" });
+  await clean.waitForSelector("#clean-result .done-head");
+  await shoot(clean, "clean-done-scanned", "light");
+
+  // a failure the server calls final — no "try again"
+  await loadClean();
+  await clean.evaluate(() => {
+    self.CleanThisApi.sanitizeFile = async () => ({ jobId: "demo", downloadToken: "demo" });
+    self.CleanThisApi.waitForJob = async () => ({
+      state: "failed",
+      retryable: false,
+      error: "Archive contained no files that could be processed.",
+    });
+  });
+  await clean.setInputFiles("#file-input", { ...DEMO_FILE, name: "bundle.zip", mimeType: "application/zip" });
+  await clean.waitForSelector("#clean-result .block.hard");
+  await shoot(clean, "clean-failure-final", "light");
 
   // failure — the server can't be reached at upload time
   await loadClean();

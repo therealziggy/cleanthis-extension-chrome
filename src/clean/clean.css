@@ -104,6 +104,8 @@ main {
 .block.hard .block-title { color: var(--red); }
 .block.amber { border-color: var(--amber); background: var(--amber-bg); }
 .block.amber .block-title { color: var(--amber); }
+/* A flagged link left in the cleaned file: where it is, in the file's own words. */
+.linkwarn-row { margin: 6px 0 0; font-family: var(--font-mono); font-size: 12px; line-height: 1.45; color: var(--ink); overflow-wrap: anywhere; }
 
 /* ── done state ────────────────────────────────────────────── */
 

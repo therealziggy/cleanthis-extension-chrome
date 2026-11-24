@@ -312,3 +312,20 @@ test("listStale flags lists older than an hour", () => {
   assert.strictEqual(flagged.listStale({ fetchedAt: Date.now() - 2 * 3600 * 1000 }), true);
   assert.strictEqual(flagged.listStale(undefined), true);
 });
+
+test("hasEntries is true when ANY tier has rows — an empty wall tier must not switch the check off", () => {
+  const row = ["0123456789abcdef", "scam", "2026-10"];
+  assert.strictEqual(flagged.hasEntries({ entries: [row], soft: [], urls: [] }), true);
+  assert.strictEqual(flagged.hasEntries({ entries: [], soft: [row], urls: [] }), true);
+  assert.strictEqual(flagged.hasEntries({ entries: [], soft: [], urls: [row] }), true);
+  // Lists stored by older versions carry only `entries`.
+  assert.strictEqual(flagged.hasEntries({ entries: [row] }), true);
+});
+
+test("hasEntries is false for an empty or missing list", () => {
+  assert.strictEqual(flagged.hasEntries({ entries: [], soft: [], urls: [] }), false);
+  assert.strictEqual(flagged.hasEntries({ entries: [] }), false);
+  assert.strictEqual(flagged.hasEntries(null), false);
+  assert.strictEqual(flagged.hasEntries(undefined), false);
+  assert.strictEqual(flagged.hasEntries({ entries: "x" }), false);
+});

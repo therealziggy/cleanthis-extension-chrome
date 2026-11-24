@@ -276,6 +276,9 @@ input[type="checkbox"] { accent-color: var(--lime-ink); width: 16px; height: 16p
   padding: 4px 10px; border: 3px solid var(--lime-ink); color: var(--lime-ink); border-radius: var(--radius-ctl);
   transform: rotate(-8deg); animation: ct-stamp .45s steps(6) both; white-space: nowrap;
 }
+/* The stamp only says CLEAN in lime; the honest alternatives carry their own color. */
+.stamp--amber { border-color: var(--amber); color: var(--amber); }
+.stamp--red { border-color: var(--red); color: var(--red); }
 
 /* ── Persistent footer strip ────────────────────────────────────── */
 .ct-foot {

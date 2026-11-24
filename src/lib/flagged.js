@@ -201,6 +201,13 @@
     return true;
   }
 
+  // Is there anything to match against? Any ONE tier is enough: a list with
+  // an empty wall tier still carries heads-up hosts and dangerous links.
+  function hasEntries(list) {
+    if (!list) return false;
+    return [list.entries, list.soft, list.urls].some((tier) => Array.isArray(tier) && tier.length > 0);
+  }
+
   // ── list refresh ────────────────────────────────────────────
 
   function listStale(stored) {
@@ -229,7 +236,7 @@
 
     if (!force && Number.isFinite(attemptAt) && Date.now() - attemptAt < ATTEMPT_MIN_GAP_MS) return;
 
-    // Only failures are stamped: a success is followed by 24h of freshness
+    // Only failures are stamped: a success is followed by an hour of freshness
     // anyway, and gating successes would change the refresh semantics.
     const noteFailure = async () => {
       try {
@@ -307,6 +314,7 @@
     peekBypass,
     takeBypass,
     softAlreadyShown,
+    hasEntries,
     listStale,
     refreshList,
   };

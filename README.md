@@ -21,6 +21,11 @@ Features:
 - **Clean a file** — its own compact window (drag & drop or browse), get back a
   sanitized copy (Light / Standard / Aggressive, the same three presets as the
   website). The cleaning level applies to file cleaning only — never to page scans.
+  The result is stamped honestly, the same way the website does it: **CLEAN** when
+  something was removed, **ALREADY CLEAN** when nothing was hiding, **SCANNED** for
+  formats that are checked but not rebuilt — and **BAD LINK** when the cleaned file
+  still contains a link or QR code leading to a site flagged as malicious. In that
+  last case nothing is saved until you choose *Save anyway*.
 - **Clean the document you're viewing** — when the tab you're on *is* a PDF or
   another cleanable document, the popup offers one click to have cleanthis.io fetch
   and rebuild it; a cleaned PDF can open straight in the browser. Opening a
@@ -42,7 +47,10 @@ Features:
   the cleaned copy instead. Every failure path offers a one-click "download the
   original anyway" — the extension never makes a file unreachable. Anything still
   waiting on you shows as a count on the toolbar icon and stays listed in the popup,
-  so a notification you miss costs you nothing. Which file types are intercepted is
+  so a notification you miss costs you nothing. A cleaned download that still
+  contains a link to a site flagged as malicious is held back the same way — it
+  waits in the popup for your *Save anyway* instead of being saved on its own.
+  Which file types are intercepted is
   a set of checkboxes in settings, fed by what cleanthis.io currently supports — new
   types show up there on their own, no update needed.
 - **Flagged-site warnings** (opt-in, **off by default**) — a full-page warning before
